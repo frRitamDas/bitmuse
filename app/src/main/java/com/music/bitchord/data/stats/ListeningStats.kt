@@ -645,6 +645,7 @@ object ListeningStats {
     )
 
     private const val TAG = "BitChordListening"
+    // Replay is device-local and must never be cleared by authentication changes.
     private const val DIRECTORY = "listening"
 
     /** How far down the artist chart a page opening will send lookups for. */

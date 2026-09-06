@@ -2334,12 +2334,9 @@ private fun BitChordApp(
                             TopBarDownloadButton(onClick = { showDownloadManager = true })
                             TopBarAccountButton(
                                 account = account,
-                                onClick = {
-                                    if (signedIn) {
-                                        viewModel.loadChannels()
-                                        showAccountSelector = true
-                                    } else showSettings = true
-                                },
+                                onClick = { showSettings = true },
+                                onAddAccount = { webSession = WebSessionMode.SIGN_IN },
+                                onOpenSettings = { showSettings = true },
                                 onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
                             )
                         }
