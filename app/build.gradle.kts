@@ -35,11 +35,11 @@ val lastfmSecret: String = (
     ).trim()
 
 android {
-    namespace = "com.music.bitchord"
+    namespace = "com.pexpo.music"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.music.bitchord"
+        applicationId = "com.pexpo.music"
         // 26 keeps reach wide; real-time blur (RenderEffect) kicks in on API 31+,
         // Haze falls back to a translucent scrim below that.
         minSdk = 26
