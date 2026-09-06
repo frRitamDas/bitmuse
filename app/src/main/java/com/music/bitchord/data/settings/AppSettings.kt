@@ -399,6 +399,9 @@ object AppSettings {
     /** The databases [syncedLyrics] may ask. Empty is the same as off. */
     val lyricsSources = MutableStateFlow(LyricsSource.entries.toSet())
 
+    /** Target language used when translating lyrics from the player. */
+    val lyricsTranslationLanguage = MutableStateFlow("en")
+
     /**
      * The order [lyricsSources] are asked in — see [LyricsRepository][com.music.bitchord.data.lyrics.LyricsRepository]:
      * every enabled source is asked at once, but a higher-priority one still
@@ -662,6 +665,7 @@ object AppSettings {
         legacyMeshGradient.value = prefs.getBoolean(KEY_LEGACY_MESH_GRADIENT, false)
         syncedLyrics.value = prefs.getBoolean(KEY_SYNCED_LYRICS, true)
         lyricsSources.value = readLyricsSources()
+        lyricsTranslationLanguage.value = prefs.getString(KEY_LYRICS_TRANSLATION_LANGUAGE, "en") ?: "en"
         lyricsSourceOrder.value = readLyricsSourceOrder()
         prioritizeSyllableSync.value = prefs.getBoolean(KEY_PRIORITIZE_SYLLABLE_SYNC, false)
         showLyricsLogs.value = prefs.getBoolean(KEY_SHOW_LYRICS_LOGS, false)
@@ -956,6 +960,11 @@ object AppSettings {
     fun setSyncedLyrics(value: Boolean) {
         syncedLyrics.value = value
         prefs.edit().putBoolean(KEY_SYNCED_LYRICS, value).apply()
+    }
+
+    fun setLyricsTranslationLanguage(value: String) {
+        lyricsTranslationLanguage.value = value
+        prefs.edit().putString(KEY_LYRICS_TRANSLATION_LANGUAGE, value).apply()
     }
 
     fun setLyricsSources(value: Set<LyricsSource>) {
@@ -1430,6 +1439,7 @@ object AppSettings {
     private const val KEY_LEGACY_MESH_GRADIENT = "legacy_mesh_gradient"
     private const val KEY_SYNCED_LYRICS = "synced_lyrics"
     private const val KEY_LYRICS_SOURCES = "lyrics_sources"
+    private const val KEY_LYRICS_TRANSLATION_LANGUAGE = "lyrics_translation_language"
     private const val KEY_LYRICS_SOURCE_ORDER = "lyrics_source_order"
     private const val KEY_PRIORITIZE_SYLLABLE_SYNC = "prioritize_syllable_sync"
     private const val KEY_SHOW_LYRICS_LOGS = "show_lyrics_logs"

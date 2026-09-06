@@ -117,6 +117,8 @@ import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
 import com.music.bitchord.ui.components.isGlassSupported
 import com.music.bitchord.ui.components.languageDisplayNameRes
+import com.music.bitchord.ui.components.LanguagePickerDialog
+import dev.chrisbanes.haze.HazeState
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.performance.resolvePerformanceRefreshRate
@@ -162,6 +164,7 @@ fun SettingsScreen(
     onSources: () -> Unit,
     onSpotifyCanvasAuth: () -> Unit,
     onAppLanguage: () -> Unit,
+    onLyricsTranslationLanguage: () -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
@@ -192,6 +195,7 @@ fun SettingsScreen(
     val legacyMeshGradient by AppSettings.legacyMeshGradient.collectAsStateWithLifecycle()
     val syncedLyrics by AppSettings.syncedLyrics.collectAsStateWithLifecycle()
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
+    val lyricsTranslationLanguage by AppSettings.lyricsTranslationLanguage.collectAsStateWithLifecycle()
     val showLyricsLogs by AppSettings.showLyricsLogs.collectAsStateWithLifecycle()
     val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
     val sessionId by AppSettings.audioSessionId.collectAsStateWithLifecycle()
@@ -725,6 +729,14 @@ fun SettingsScreen(
             // sources are third-party services being reached on the user's
             // connection — which is the part worth being able to narrow.
             if (syncedLyrics) {
+                RowDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.Language,
+                    title = stringResource(R.string.lyrics_translation_language),
+                    subtitle = stringResource(languageDisplayNameRes(lyricsTranslationLanguage)),
+                    trailing = { Chevron() },
+                    onClick = onLyricsTranslationLanguage,
+                )
                 RowDivider()
             SettingsRow(
                 icon = Icons.Rounded.BlurOn,

@@ -2,6 +2,13 @@ package com.music.bitchord.ui.components
 
 import com.music.bitchord.R
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -25,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +58,9 @@ import com.music.bitchord.data.settings.AppSettings
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
+
+private const val SOURCES_DIALOG_ANIMATION_MS = 220
+private const val SOURCES_DIALOG_EXIT_MS = 220L
 
 /**
  * Which lyric databases the player is allowed to ask.
@@ -78,6 +89,16 @@ fun LyricsSourcesDialog(
     val savedOrder by AppSettings.lyricsSourceOrder.collectAsStateWithLifecycle()
     val prioritizeSyllableSync by AppSettings.prioritizeSyllableSync.collectAsStateWithLifecycle()
     val shape = RoundedCornerShape(ALERT_CORNER)
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    LaunchedEffect(visible) {
+        if (!visible) {
+            kotlinx.coroutines.delay(SOURCES_DIALOG_EXIT_MS)
+            onDismiss()
+        }
+    }
+    fun dismissAnimated() { visible = false }
+    BackHandler(enabled = visible) { dismissAnimated() }
 
     Box(
         modifier = modifier
@@ -86,10 +107,17 @@ fun LyricsSourcesDialog(
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
-                onClick = onDismiss,
+                onClick = ::dismissAnimated,
             ),
         contentAlignment = Alignment.Center,
     ) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(SOURCES_DIALOG_ANIMATION_MS)) +
+                scaleIn(tween(SOURCES_DIALOG_ANIMATION_MS), initialScale = 0.94f),
+            exit = fadeOut(tween(SOURCES_DIALOG_ANIMATION_MS)) +
+                scaleOut(tween(SOURCES_DIALOG_ANIMATION_MS), targetScale = 0.94f),
+        ) {
         Column(
             modifier = Modifier
                 .width(ALERT_WIDTH)
@@ -98,10 +126,12 @@ fun LyricsSourcesDialog(
                     if (reduceDynamicBlur) {
                         Modifier.background(MaterialTheme.colorScheme.surface)
                     } else {
-                        Modifier.optimizedHazeEffect(
+                        Modifier
+                            .background(MaterialTheme.colorScheme.surface)
+                            .optimizedHazeEffect(
                             state = hazeState,
                             style = HazeMaterials.regular(MaterialTheme.colorScheme.surface),
-                        )
+                            )
                     },
                 )
                 // Swallows the tap before it reaches the scrim behind, so
@@ -168,7 +198,8 @@ fun LyricsSourcesDialog(
                 onClick = AppSettings::resetLyricsSourceSettings,
             )
             AlertRule()
-            AlertAction(label = stringResource(R.string.done), emphasised = true, onClick = onDismiss)
+            AlertAction(label = stringResource(R.string.done), emphasised = true, onClick = ::dismissAnimated)
+        }
         }
     }
 }

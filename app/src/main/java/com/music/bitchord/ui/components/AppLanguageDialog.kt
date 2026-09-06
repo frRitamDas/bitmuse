@@ -1,6 +1,13 @@
 package com.music.bitchord.ui.components
 
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -21,8 +28,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,6 +89,16 @@ fun AppLanguageDialog(
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
     val shape = RoundedCornerShape(ALERT_CORNER)
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    LaunchedEffect(visible) {
+        if (!visible) {
+            kotlinx.coroutines.delay(LANGUAGE_DIALOG_EXIT_MS)
+            onDismiss()
+        }
+    }
+    fun dismissAnimated() { visible = false }
+    BackHandler(enabled = visible) { dismissAnimated() }
     val currentLanguage = AppCompatDelegate.getApplicationLocales().get(0)?.language
         ?: Locale.getDefault().language
 
@@ -89,10 +109,15 @@ fun AppLanguageDialog(
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
-                onClick = onDismiss,
+                onClick = ::dismissAnimated,
             ),
         contentAlignment = Alignment.Center,
     ) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(LANGUAGE_DIALOG_ANIMATION_MS)) + scaleIn(tween(LANGUAGE_DIALOG_ANIMATION_MS), initialScale = 0.94f),
+            exit = fadeOut(tween(LANGUAGE_DIALOG_ANIMATION_MS)) + scaleOut(tween(LANGUAGE_DIALOG_ANIMATION_MS), targetScale = 0.94f),
+        ) {
         Column(
             modifier = Modifier
                 .width(ALERT_WIDTH)
@@ -101,10 +126,12 @@ fun AppLanguageDialog(
                     if (reduceDynamicBlur) {
                         Modifier.background(MaterialTheme.colorScheme.surface)
                     } else {
-                        Modifier.optimizedHazeEffect(
+                        Modifier
+                            .background(MaterialTheme.colorScheme.surface)
+                            .optimizedHazeEffect(
                             state = hazeState,
                             style = HazeMaterials.regular(MaterialTheme.colorScheme.surface),
-                        )
+                            )
                     },
                 )
                 // Swallows the tap before it reaches the scrim behind, so
@@ -151,13 +178,112 @@ fun AppLanguageDialog(
                         AppCompatDelegate.setApplicationLocales(
                             LocaleListCompat.forLanguageTags(language.tag),
                         )
-                        onDismiss()
+                        dismissAnimated()
                     },
                 )
             }
         }
+        }
     }
 }
+
+/** Same in-app language picker surface, usable for feature-specific languages. */
+@OptIn(ExperimentalHazeMaterialsApi::class)
+@Composable
+fun LanguagePickerDialog(
+    hazeState: HazeState,
+    titleRes: Int,
+    descriptionRes: Int,
+    selectedTag: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+    val shape = RoundedCornerShape(ALERT_CORNER)
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+    LaunchedEffect(visible) {
+        if (!visible) {
+            kotlinx.coroutines.delay(LANGUAGE_DIALOG_EXIT_MS)
+            onDismiss()
+        }
+    }
+    fun dismissAnimated() { visible = false }
+    BackHandler(enabled = visible) { dismissAnimated() }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(SCRIM_COLOR)
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = ::dismissAnimated,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(tween(LANGUAGE_DIALOG_ANIMATION_MS)) + scaleIn(tween(LANGUAGE_DIALOG_ANIMATION_MS), initialScale = 0.94f),
+            exit = fadeOut(tween(LANGUAGE_DIALOG_ANIMATION_MS)) + scaleOut(tween(LANGUAGE_DIALOG_ANIMATION_MS), targetScale = 0.94f),
+        ) {
+        Column(
+            modifier = Modifier
+                .width(ALERT_WIDTH)
+                .clip(shape)
+                .then(
+                    if (reduceDynamicBlur) Modifier.background(MaterialTheme.colorScheme.surface)
+                    else Modifier
+                        .background(MaterialTheme.colorScheme.surface)
+                        .optimizedHazeEffect(
+                            state = hazeState,
+                            style = HazeMaterials.regular(MaterialTheme.colorScheme.surface),
+                        )
+                )
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = {},
+                ),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 19.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = stringResource(titleRes),
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.W600,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = stringResource(descriptionRes),
+                    modifier = Modifier.padding(top = 4.dp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 17.sp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            SUPPORTED_LANGUAGES.forEach { language ->
+                AlertRule()
+                LanguageRow(
+                    language = language,
+                    selected = language.tag == selectedTag,
+                    onClick = { onSelect(language.tag); dismissAnimated() },
+                )
+            }
+        }
+        }
+    }
+}
+
+private const val LANGUAGE_DIALOG_ANIMATION_MS = 220
+private const val LANGUAGE_DIALOG_EXIT_MS = 220L
 
 @Composable
 private fun LanguageRow(language: AppLanguage, selected: Boolean, onClick: () -> Unit) {

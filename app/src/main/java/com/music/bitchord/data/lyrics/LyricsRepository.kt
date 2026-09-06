@@ -3,7 +3,7 @@ package com.music.bitchord.data.lyrics
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.supervisorScope
 
 /**
  * Where the player gets its lyrics.
@@ -60,7 +60,7 @@ object LyricsRepository {
         sources: Set<LyricsSource> = LyricsSource.entries.toSet(),
         order: List<LyricsSource> = LyricsSource.entries,
         prioritizeSyllableSync: Boolean = false,
-    ): Result? = coroutineScope {
+    ): Result? = supervisorScope {
         LyricsLog.clear()
         LyricsLog.i("Repository", "Looking up lyrics for \"$title\" by \"$artist\" (${durationMs / 1000}s)")
 
@@ -74,7 +74,11 @@ object LyricsRepository {
         val racing: List<Pair<LyricsSource, Deferred<List<LyricLine>?>>> = sequence.map { source ->
             val startMode = if (source == LyricsSource.GENIUS) kotlinx.coroutines.CoroutineStart.LAZY else kotlinx.coroutines.CoroutineStart.DEFAULT
             source to async(Dispatchers.IO, start = startMode) {
-                fetch(source, videoId, title, artist, durationMs, album)
+                runCatching {
+                    fetch(source, videoId, title, artist, durationMs, album)
+                }.onFailure {
+                    LyricsLog.e(source.label, "Source failed: ${it::class.simpleName}: ${it.message}")
+                }.getOrNull()
             }
         }
 
@@ -94,11 +98,11 @@ object LyricsRepository {
                 val lines = runCatching { job.await() }.getOrNull() ?: continue
                 if (lines.any { it.isWordSynced }) {
                     LyricsLog.s("Repository", "Word-synced match from ${source.label}")
-                    return@coroutineScope result(source, lines)
+                    return@supervisorScope result(source, lines)
                 }
                 if (!prioritizeSyllableSync && lines.any { it.timeMs > 0 }) {
                     LyricsLog.s("Repository", "Line-synced match from ${source.label}")
-                    return@coroutineScope result(source, lines)
+                    return@supervisorScope result(source, lines)
                 }
                 if (lineSynced == null) lineSynced = result(source, lines)
             }

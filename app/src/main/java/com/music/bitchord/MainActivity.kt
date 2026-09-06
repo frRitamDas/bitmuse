@@ -181,6 +181,7 @@ import com.music.bitchord.ui.components.TopBarDownloadButton
 import com.music.bitchord.ui.components.TopFadeBlur
 import com.music.bitchord.ui.components.topBarContentPadding
 import com.music.bitchord.ui.components.AppLanguageDialog
+import com.music.bitchord.ui.components.LanguagePickerDialog
 import com.music.bitchord.ui.components.LyricsSourcesDialog
 import com.music.bitchord.ui.components.UpdateAvailableDialog
 import com.music.bitchord.ui.icons.BitChordIcons
@@ -406,6 +407,7 @@ private fun BitChordApp(
     var librarySortMenuOpen by remember { mutableStateOf(false) }
     var showLyricsSources by remember { mutableStateOf(false) }
     var showAppLanguage by remember { mutableStateOf(false) }
+    var showLyricsTranslationLanguage by remember { mutableStateOf(false) }
     var showAccountSelector by remember { mutableStateOf(false) }
     var showListenBrainzLogin by remember { mutableStateOf(false) }
     var showLastfmLogin by remember { mutableStateOf(false) }
@@ -516,6 +518,7 @@ private fun BitChordApp(
     val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
     val lyricsSource by viewModel.lyricsSource.collectAsStateWithLifecycle()
     val lyricsChecked by viewModel.lyricsChecked.collectAsStateWithLifecycle()
+    val lyricsTranslation by viewModel.lyricsTranslation.collectAsStateWithLifecycle()
     val searchHistory by viewModel.searchHistory.collectAsStateWithLifecycle()
     val searchSuggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     val searchLoadingMore by viewModel.searchLoadingMore.collectAsStateWithLifecycle()
@@ -1563,6 +1566,10 @@ private fun BitChordApp(
             lyrics = lyrics,
             lyricsSource = lyricsSource,
             lyricsUnavailable = lyricsChecked && lyrics.isNullOrEmpty(),
+            lyricsChecked = lyricsChecked,
+            lyricsTranslation = lyricsTranslation,
+            onTranslateLyrics = viewModel::translateLyrics,
+            onShowOriginalLyrics = viewModel::showOriginalLyrics,
             docked = docked,
             onClearQueue = {
                 // Keep what's playing; drop everything queued after it.
@@ -1844,6 +1851,7 @@ private fun BitChordApp(
                             onSources = { showSources = true },
                             onSpotifyCanvasAuth = { showSpotifyCanvasAuth = true },
                             onAppLanguage = { showAppLanguage = true },
+                            onLyricsTranslationLanguage = { showLyricsTranslationLanguage = true },
                             contentPadding = listPadding,
                         )
                     } else if (page != null && page.browseId.isDeviceFolder()) {
@@ -2970,7 +2978,6 @@ private fun BitChordApp(
         }
 
         if (showLyricsSources) {
-            BackHandler { showLyricsSources = false }
             LyricsSourcesDialog(
                 hazeState = hazeState,
                 onDismiss = { showLyricsSources = false },
@@ -3002,10 +3009,20 @@ private fun BitChordApp(
         }
 
         if (showAppLanguage) {
-            BackHandler { showAppLanguage = false }
             AppLanguageDialog(
                 hazeState = hazeState,
                 onDismiss = { showAppLanguage = false },
+            )
+        }
+
+        if (showLyricsTranslationLanguage) {
+            LanguagePickerDialog(
+                hazeState = hazeState,
+                titleRes = R.string.lyrics_translation_language,
+                descriptionRes = R.string.lyrics_translation_language_subtitle,
+                selectedTag = AppSettings.lyricsTranslationLanguage.collectAsStateWithLifecycle().value,
+                onSelect = AppSettings::setLyricsTranslationLanguage,
+                onDismiss = { showLyricsTranslationLanguage = false },
             )
         }
 
