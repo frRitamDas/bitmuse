@@ -17,9 +17,12 @@ jobs:
         distribution: 'temurin'
         cache: gradle
     - name: Setup local.properties
+      env:
+        LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+        LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
       run: |
-        echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
-        echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+        printf 'LASTFM_API_KEY=%s\n' "$LASTFM_API_KEY" > local.properties
+        printf 'LASTFM_SECRET=%s\n' "$LASTFM_SECRET" >> local.properties
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Build Dev Debug APK
@@ -43,14 +46,61 @@ jobs:
         distribution: 'temurin'
         cache: gradle
     - name: Setup Secrets (Keystore & local.properties)
+      env:
+        LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+        LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
-        echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
-        echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > bitchord-release.jks
-        echo "storeFile=bitchord-release.jks" > keystore.properties
-        echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" >> keystore.properties
-        echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> keystore.properties
-        echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> keystore.properties
+        set -euo pipefail
+
+        printf 'LASTFM_API_KEY=%s\n' "$LASTFM_API_KEY" > local.properties
+        printf 'LASTFM_SECRET=%s\n' "$LASTFM_SECRET" >> local.properties
+
+        valid_keystore=false
+        if [ -n "$KEYSTORE_BASE64" ]; then
+          if printf '%s' "$KEYSTORE_BASE64" | base64 --decode > bitchord-release.jks 2>/dev/null; then
+            if [ -s bitchord-release.jks ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+              if keytool -list -keystore bitchord-release.jks -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1 && \
+                 keytool -list -keystore bitchord-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
+                valid_keystore=true
+              fi
+            fi
+          fi
+        fi
+
+        if [ "$valid_keystore" = true ]; then
+          echo 'Using configured release keystore.'
+          {
+            echo 'storeFile=bitchord-release.jks'
+            printf 'storePassword=%s\n' "$KEYSTORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+          } > keystore.properties
+        else
+          echo 'Configured release keystore is unavailable or invalid; generating a temporary CI signing key.'
+          rm -f bitchord-release.jks
+          CI_STORE_PASSWORD="$(openssl rand -hex 32)"
+          CI_KEY_PASSWORD="$CI_STORE_PASSWORD"
+          keytool -genkeypair -v \
+            -storetype JKS \
+            -keystore bitchord-release.jks \
+            -alias bitchord-ci \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "$CI_STORE_PASSWORD" \
+            -keypass "$CI_KEY_PASSWORD" \
+            -dname 'CN=BitChord CI, O=BitChord, C=IN' >/dev/null
+          {
+            echo 'storeFile=bitchord-release.jks'
+            printf 'storePassword=%s\n' "$CI_STORE_PASSWORD"
+            echo 'keyAlias=bitchord-ci'
+            printf 'keyPassword=%s\n' "$CI_KEY_PASSWORD"
+          } > keystore.properties
+        fi
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Build Signed Prod Release APK
