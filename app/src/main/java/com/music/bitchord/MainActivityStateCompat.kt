@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.music.bitchord.auth.WebSessionMode
 
+typealias WebSessionMode = com.music.bitchord.auth.WebSessionMode
+
 /**
  * Compatibility state for the partially restored account-session UI in MainActivity.
  *
