@@ -1,18 +1,14 @@
 package com.music.bitchord.ui
 
-import com.music.bitchord.auth.CapturedSession
-import com.music.bitchord.auth.WebSessionMode
 import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.accountChannels as loadAccountChannels
 import com.music.bitchord.data.innertube.Innertube
 import com.music.bitchord.data.innertube.adoptSessionScope as adoptScope
 import com.music.bitchord.data.innertube.selectChannel as applyChannel
-import com.music.bitchord.data.model.AccountChannel
 
-/** Type aliases keep the restored ViewModel API source-compatible with the model layer. */
-typealias ViewModelAccountChannel = AccountChannel
-typealias ViewModelCapturedSession = CapturedSession
-typealias ViewModelWebSessionMode = WebSessionMode
+typealias AccountChannel = com.music.bitchord.data.model.AccountChannel
+typealias CapturedSession = com.music.bitchord.auth.CapturedSession
+typealias WebSessionMode = com.music.bitchord.auth.WebSessionMode
 
 /** Compatibility forwarding extension for the repository account-channel loader. */
 suspend fun YtMusicRepository.accountChannels(): Result<List<AccountChannel>> = loadAccountChannels(this)
@@ -31,14 +27,9 @@ fun Innertube.adoptSessionScope(
 ) = adoptScope(this, pageId, dataSyncId, authUser, visitorData, clientVersion, loggedIn)
 
 /**
- * The partially restored onWebSession path only uses this as a post-capture
- * guard. A successful captured session necessarily has a signed-in cookie, so
- * treating the compatibility value as true preserves the intended refresh path.
+ * Compatibility fallback for the partially restored onWebSession path. The
+ * callback is reached only after a valid captured browser session has been
+ * accepted, so the post-capture refresh path remains enabled.
  */
 val MainViewModel.wasSignedIn: Boolean
     get() = true
-
-// Keep the unqualified names used by the restored ViewModel available in this package.
-typealias AccountChannel = com.music.bitchord.data.model.AccountChannel
-typealias CapturedSession = com.music.bitchord.auth.CapturedSession
-typealias WebSessionMode = com.music.bitchord.auth.WebSessionMode
