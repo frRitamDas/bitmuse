@@ -13,7 +13,7 @@ def add_import(text: str, imp: str) -> str:
 def patch_branding() -> None:
     for path in ROOT.glob('app/src/main/res/**/strings.xml'):
         text = path.read_text(encoding='utf-8')
-        new = text.replace('BitChord', 'Pexpo').replace('Music/Pexpo', 'Music/Pexpo')
+        new = text.replace('BitChord', 'Pexpo')
         if new != text:
             path.write_text(new, encoding='utf-8')
 
@@ -41,7 +41,6 @@ def patch_branding() -> None:
 def patch_account_menu() -> None:
     path = ROOT / 'app/src/main/java/com/music/bitchord/ui/components/FrostedTopBar.kt'
     text = path.read_text(encoding='utf-8')
-
     start = text.find('@Composable\nfun TopBarAccountButton(')
     if start < 0:
         raise RuntimeError('TopBarAccountButton marker not found')
@@ -92,10 +91,7 @@ fun TopBarAccountButton(
                 model = photo,
                 contentDescription = stringResource(R.string.switch_account),
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(AVATAR_SIZE)
-                    .clip(CircleShape)
-                    .thumbnailBorder(CircleShape),
+                modifier = Modifier.size(AVATAR_SIZE).clip(CircleShape).thumbnailBorder(CircleShape),
             )
         } else {
             Box(
@@ -126,7 +122,6 @@ fun TopBarAccountButton(
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
         )
-
         if (accounts.isEmpty()) {
             DropdownMenuItem(
                 text = { Text("Sign in to an account") },
@@ -141,13 +136,7 @@ fun TopBarAccountButton(
                 if (managing) {
                     DropdownMenuItem(
                         text = {
-                            Text(
-                                if (googleAccount.accountId == activeAccountId) {
-                                    "${googleAccount.name} (current)"
-                                } else {
-                                    googleAccount.name
-                                },
-                            )
+                            Text(if (googleAccount.accountId == activeAccountId) "${googleAccount.name} (current)" else googleAccount.name)
                         },
                         onClick = {
                             viewModel.removeAccount(googleAccount.accountId)
@@ -172,7 +161,6 @@ fun TopBarAccountButton(
                 }
             }
         }
-
         HorizontalDivider()
         DropdownMenuItem(
             text = { Text(if (managing) "Done" else "Manage accounts") },
@@ -205,7 +193,6 @@ fun TopBarAccountButton(
         'import androidx.compose.material3.DropdownMenuItem',
         'import androidx.compose.runtime.mutableStateOf',
         'import androidx.compose.runtime.setValue',
-        'import androidx.compose.ui.unit.Dp',
         'import androidx.compose.ui.unit.dp',
         'import androidx.lifecycle.viewmodel.compose.viewModel',
         'import com.music.bitchord.ui.MainViewModel',
@@ -221,15 +208,14 @@ fun TopBarAccountButton(
     main = ROOT / 'app/src/main/java/com/music/bitchord/MainActivity.kt'
     text = main.read_text(encoding='utf-8')
     old = '''onClick = {
-                            if (signedIn) {
-                                showAccountSelector = true
-                            } else {
-                                showSettings = true
-                            }
-                        },'''
+                                    if (signedIn) {
+                                        viewModel.loadChannels()
+                                        showAccountSelector = true
+                                    } else showSettings = true
+                                },'''
     new = '''onClick = { showSettings = true },
-                        onAddAccount = { webSession = WebSessionMode.SIGN_IN },
-                        onOpenSettings = { showSettings = true },'''
+                                onAddAccount = { webSession = WebSessionMode.SIGN_IN },
+                                onOpenSettings = { showSettings = true },'''
     if old not in text:
         raise RuntimeError('MainActivity account callback marker not found')
     main.write_text(text.replace(old, new, 1), encoding='utf-8')
