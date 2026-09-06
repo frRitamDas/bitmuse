@@ -21,6 +21,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
       - name: Revert the incomplete brand-channel revert
-        run: git revert --no-edit e5b20928c629bef0e2a2b4952fb112e17bd1c722
+        run: git revert -X theirs --no-edit e5b20928c629bef0e2a2b4952fb112e17bd1c722
       - name: Push repair commit
         run: git push origin HEAD:main
