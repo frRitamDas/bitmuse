@@ -5,7 +5,7 @@
 
 <img src="Logo.png" alt="BitChord app icon" width="200" />
 
-# BitChord
+# Pexpo
 
 ### Aesthetic YouTube Music Client
 
