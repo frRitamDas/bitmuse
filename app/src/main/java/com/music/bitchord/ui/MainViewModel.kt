@@ -22,10 +22,7 @@ import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.innertube.Innertube
 import com.music.bitchord.data.innertube.PlaybackTracker
 import com.music.bitchord.data.innertube.StreamResolver
-import com.music.bitchord.auth.CapturedSession
-import com.music.bitchord.auth.WebSessionMode
 import com.music.bitchord.data.model.Account
-import com.music.bitchord.data.model.AccountChannel
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.DetailPage
 import com.music.bitchord.data.model.HomeShelf
@@ -2229,7 +2226,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // session overturns — so a listener who signs in to play a track must
         // not spend the next ten minutes being told it still cannot be played.
         StreamResolver.onSessionChanged()
-        val wasSignedIn = _signedIn.value
         _signedIn.value = true
         if (wasSignedIn) clearListenerState()
         reloadForAccount()

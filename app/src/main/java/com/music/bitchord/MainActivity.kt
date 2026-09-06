@@ -98,7 +98,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.music.bitchord.auth.DiscordLoginScreen
-import com.music.bitchord.auth.WebSessionMode
 import com.music.bitchord.auth.YtMusicLoginScreen
 import com.music.bitchord.data.AppUpdateChecker
 import com.music.bitchord.data.LocalMediaRepository
@@ -374,11 +373,7 @@ private fun BitChordApp(
             PlayerDeepLink.handled()
         }
     }
-    /**
-     * What the in-app browser is open for, or null while it is closed —
-     * signing in, or picking a channel in YouTube Music's own Accounts list.
-     */
-    var webSession by remember { mutableStateOf<WebSessionMode?>(null) }
+    var showLogin by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     // Replay: the page, the stories over it, and the share sheet over those.
     // Three states rather than one enum because they stack — the stories are
@@ -1804,7 +1799,6 @@ private fun BitChordApp(
                         AccountAndScrobblingScreen(
                             signedIn = signedIn,
                             account = account,
-                            channelName = selectedChannelName,
                             onSignIn = {
                                 showAccountScrobbling = false
                                 showSettings = false
@@ -1832,7 +1826,7 @@ private fun BitChordApp(
                             account = account,
                             onSignIn = {
                                 showSettings = false
-                                webSession = WebSessionMode.SIGN_IN
+                                showLogin = true
                             },
                             onSignOut = { viewModel.signOut() },
                             onAccountScrobbling = { showAccountScrobbling = true },
@@ -2004,7 +1998,7 @@ private fun BitChordApp(
                             listState = homeListState,
                             title = stringResource(R.string.listen_now),
                             signedIn = signedIn,
-                            onSignIn = { webSession = WebSessionMode.SIGN_IN },
+                            onSignIn = { showLogin = true },
                             onItemClick = { item ->
                                 val song = shelfSong(item)
                                 when {
@@ -2145,7 +2139,7 @@ private fun BitChordApp(
                             onShowAll = { shelf -> libraryShowAll = shelf },
                             replayCard = replayCards.firstOrNull(),
                             onOpenReplay = { showReplay = true },
-                            onSignIn = { webSession = WebSessionMode.SIGN_IN },
+                            onSignIn = { showLogin = true },
                             onRetry = viewModel::loadLibrary,
                             refreshing = MainViewModel.Feed.LIBRARY in refreshing,
                             onRefresh = { viewModel.refresh(MainViewModel.Feed.LIBRARY) },
@@ -2865,14 +2859,8 @@ private fun BitChordApp(
         }
 
         // ---- Google sign-in (full screen WebView) ----
-        webSession?.let { mode ->
-            BackHandler { webSession = null }
-            // Raised by "Use this channel", read by the browser as "take the
-            // session from the page as it now stands". A counter rather than a
-            // flag so a second tap, after a failed first one, is still a new
-            // request rather than a value that was already true.
-            var captureRequest by remember(mode) { mutableIntStateOf(0) }
-            var captureFailed by remember(mode) { mutableStateOf(false) }
+        if (showLogin) {
+            BackHandler { showLogin = false }
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 Column(Modifier.fillMaxSize()) {
                     Row(
@@ -2882,7 +2870,7 @@ private fun BitChordApp(
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        IconButton(onClick = { webSession = null }) {
+                        IconButton(onClick = { showLogin = false }) {
                             Icon(
                                 Icons.Rounded.Close,
                                 contentDescription = stringResource(R.string.close),
@@ -2921,13 +2909,10 @@ private fun BitChordApp(
                         }
                     }
                     YtMusicLoginScreen(
-                        mode = mode,
-                        captureRequest = captureRequest,
-                        onCaptureUnavailable = { captureFailed = true },
-                        onCaptured = { session ->
-                            viewModel.onWebSession(session, mode)
-                            webSession = null
-                            if (mode == WebSessionMode.SIGN_IN) selectedTab = 2
+                        onCookiesCaptured = { cookie ->
+                            viewModel.onSignedIn(cookie)
+                            showLogin = false
+                            selectedTab = 2
                         },
                     )
                 }
