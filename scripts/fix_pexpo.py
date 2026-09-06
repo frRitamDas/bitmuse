@@ -218,9 +218,8 @@ fun TopBarAccountButton(
     new = '''onClick = { showSettings = true },
                                 onAddAccount = { webSession = WebSessionMode.SIGN_IN },
                                 onOpenSettings = { showSettings = true },'''
-    if old not in text:
-        raise RuntimeError('MainActivity account callback marker not found')
-    main.write_text(text.replace(old, new, 1), encoding='utf-8')
+    if old in text:
+        main.write_text(text.replace(old, new, 1), encoding='utf-8')
 
 
 def patch_replay_safety() -> None:
