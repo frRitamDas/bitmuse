@@ -27,13 +27,46 @@ private const val LOGIN_URL = "https://accounts.google.com/ServiceLogin?ltmpl=mu
 private val LOGOUT_THEN_LOGIN_URL = "https://accounts.google.com/Logout?continue=${Uri.encode(LOGIN_URL)}"
 private const val TAG = "BitChord"
 
+private const val LOGIN_URL =
+    "https://accounts.google.com/ServiceLogin" +
+        "?ltmpl=music&service=youtube&passive=true" +
+        "&continue=https%3A%2F%2Fmusic.youtube.com%2F"
+
+private const val TAG = "BitChord"
+
+/**
+ * In-app Google sign-in for YouTube Music, and the way to change which channel
+ * it listens as.
+ *
+ * [WebSessionMode.SIGN_IN] loads the standard Google web login with
+ * `continue=music.youtube.com`. The user authenticates directly against
+ * accounts.google.com (2FA, passkeys etc. all work — it's the real page). When
+ * Google redirects back to music.youtube.com the session is taken automatically
+ * and the screen closes. The browser's Google cookies are cleared on the way in,
+ * or a listener who signed out would be waved straight back through as the
+ * account they were trying to leave — see [BrowserSession.clearGoogleCookies].
+ *
+ * [WebSessionMode.SWITCH_CHANNEL] keeps those cookies and opens YouTube Music
+ * itself, so the listener can use the avatar menu's own Accounts list — the one
+ * screen that authoritatively knows which channels exist and which is which.
+ * Nothing is taken automatically there: the session is read when they say so,
+ * by raising [captureRequest].
+ *
+ * Either way what is read is the page's own `ytcfg`, not a guess made later
+ * from a server-side fetch. The credential itself never passes through app code.
+ */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun YtMusicLoginScreen(
     mode: WebSessionMode,
     onCaptured: (CapturedSession) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Raise to take the session from the page as it stands. Ignored at its
+     * initial value, so arriving on the screen doesn't capture anything.
+     */
     captureRequest: Int = 0,
+    /** Told when a capture was asked for and there was no session to take. */
     onCaptureUnavailable: () -> Unit = {},
 ) {
     var webView by remember { mutableStateOf<WebView?>(null) }
@@ -56,38 +89,70 @@ fun YtMusicLoginScreen(
                 webViewClient = object : WebViewClient() {
                     private var captured = false
                     override fun onPageFinished(view: WebView?, url: String?) {
+                        // Only [WebSessionMode.SIGN_IN] finishes by itself. In
+                        // the switch flow the first music.youtube.com page is
+                        // where the listener starts, not where they are done —
+                        // grabbing the session there would save the channel
+                        // they came to change.
                         if (mode != WebSessionMode.SIGN_IN) return
                         if (captured || url?.startsWith(MUSIC_ORIGIN) != true) return
                         if (view != null && captureFrom(view, currentOnCaptured)) captured = true
                     }
                 }
+
                 webView = this
-                loadUrl(if (mode == WebSessionMode.SIGN_IN) LOGOUT_THEN_LOGIN_URL else "$MUSIC_ORIGIN/")
+                loadUrl(if (mode == WebSessionMode.SIGN_IN) LOGIN_URL else "$MUSIC_ORIGIN/")
             }
         },
     )
 }
 
+/**
+ * Takes the session from [view], if it is holding one.
+ *
+ * @return whether there was one to take. False means the cookie jar has no
+ *   signing secret in it yet — the page is mid-login, or is not a YouTube page
+ *   at all — and the caller should leave the screen open rather than saving
+ *   something that cannot sign a request. See [AuthStore.hasApiSid].
+ */
 private fun captureFrom(view: WebView, onCaptured: (CapturedSession) -> Unit): Boolean {
     val cookies = CookieManager.getInstance().getCookie(MUSIC_ORIGIN)
     if (cookies == null || !AuthStore.hasApiSid(cookies)) return false
+    // Flushed here rather than left to the WebView's own schedule: the screen
+    // is usually closing in the next frame, and a cookie jar written after
+    // that is a jar the next sign-in reads instead of this one.
     CookieManager.getInstance().flush()
+
     view.evaluateJavascript(YTCFG_PROBE) { raw ->
         val config = raw.parseConfig()
-        if (config == null) Log.w(TAG, "no ytcfg on the page; falling back to the shell for identity")
-        onCaptured(CapturedSession(
-            cookie = cookies,
-            dataSyncId = config?.string("dataSyncId")?.substringBefore("||"),
-            pageId = config?.string("pageId"),
-            authUser = config?.string("authUser"),
-            visitorData = config?.string("visitorData"),
-            clientVersion = config?.string("clientVersion"),
-            loggedIn = config?.get("loggedIn").let { it is JsonPrimitive && it.content == "true" },
-        ))
+        if (config == null) {
+            Log.w(TAG, "no ytcfg on the page; falling back to the shell for identity")
+        }
+        onCaptured(
+            CapturedSession(
+                cookie = cookies,
+                // `<accountSyncId>||<sessionSyncId>` — only the first half
+                // names the account; the second changes on its own schedule.
+                dataSyncId = config?.string("dataSyncId")?.substringBefore("||"),
+                pageId = config?.string("pageId"),
+                authUser = config?.string("authUser"),
+                visitorData = config?.string("visitorData"),
+                clientVersion = config?.string("clientVersion"),
+                loggedIn = config?.get("loggedIn").let { it is JsonPrimitive && it.content == "true" },
+            ),
+        )
     }
     return true
 }
 
+/**
+ * The identity of the page as the page itself has it.
+ *
+ * Returns an object rather than a string so the WebView serialises it — a
+ * probe that stringified its own result would come back double-encoded. A page
+ * without `ytcfg` (an error page, a redirect that hasn't landed) returns null,
+ * which is a fine answer and not an error.
+ */
 private const val YTCFG_PROBE = """
 (function () {
   try {
@@ -111,5 +176,10 @@ private const val YTCFG_PROBE = """
 """
 
 private val json = Json { ignoreUnknownKeys = true }
-private fun String?.parseConfig(): JsonObject? = this?.let { runCatching { json.parseToJsonElement(it).jsonObject }.getOrNull() }
-private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+
+/** The probe's result, or null for anything that isn't the object it promises. */
+private fun String?.parseConfig(): JsonObject? =
+    this?.let { runCatching { json.parseToJsonElement(it).jsonObject }.getOrNull() }
+
+private fun JsonObject.string(key: String): String? =
+    (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }

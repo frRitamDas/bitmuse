@@ -72,13 +72,21 @@ fun AccountAndScrobblingScreen(
         AccountCard(signedIn = signedIn, account = account, onSignIn = onSignIn, onClick = onSwitchChannel)
 
         if (signedIn) {
-            SettingsGroup(footer = stringResource(R.string.account_profiles_help)) {
+            SettingsGroup(
+                footer = "A Google account can own brand channels, and each one is a " +
+                    "separate YouTube Music listener with its own library, likes and " +
+                    "history. Pick the one your music is on.",
+            ) {
                 SettingsRow(
                     icon = Icons.Rounded.SwitchAccount,
-                    title = stringResource(R.string.listen_as),
-                    subtitle = channelName ?: stringResource(R.string.default_youtube_profile),
+                    title = "Listen as",
+                    subtitle = channelName ?: "YouTube Music's default channel",
                     onClick = onSwitchChannel,
                 )
+            }
+
+            SettingsGroup {
+                DestructiveRow(label = "Sign out", onClick = onSignOut)
             }
             SettingsGroup { DestructiveRow(label = stringResource(R.string.sign_out), onClick = onSignOut) }
         }

@@ -49,12 +49,11 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         // it: a play registered under the wrong account is indistinguishable, to
         // the listener, from one that was never registered at all. Fire and
         // forget — every caller works without it, just less precisely.
-        if (restoredSession != null) {
+        if (authStore.cookie != null) {
             // After the cookie, never before: setting the cookie clears any
             // channel the last session was acting as, so restoring the choice
             // first would restore it into the value about to be wiped.
-            restoredSession.profiles.firstOrNull { it.profileId == restoredSession.activeProfileId }
-                ?.let { Innertube.selectChannel(it.pageId, it.dataSyncId, it.authUser) }
+            Innertube.selectChannel(authStore.channelPageId, authStore.channelDataSyncId)
             CoroutineScope(Dispatchers.IO).launch { Innertube.ensureSessionScope() }
         }
         AppSettings.init(this)
