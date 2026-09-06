@@ -332,6 +332,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _selectedChannelName = MutableStateFlow(authStore.channelName)
     val selectedChannelName: StateFlow<String?> = _selectedChannelName.asStateFlow()
 
+    /** Source of truth for Google sessions and their YouTube identities. */
+    private val _googleAccounts = MutableStateFlow(authStore.sessions)
+    val googleAccounts: StateFlow<List<GoogleAccountSession>> = _googleAccounts.asStateFlow()
+    private val _activeAccountId = MutableStateFlow(authStore.activeSession?.accountId)
+    val activeAccountId: StateFlow<String?> = _activeAccountId.asStateFlow()
+    private val _activeProfileId = MutableStateFlow(authStore.activeProfileId)
+    val activeProfileId: StateFlow<String?> = _activeProfileId.asStateFlow()
+
     private val _history = MutableStateFlow<UiState<List<Song>>>(UiState.Loading)
     val history: StateFlow<UiState<List<Song>>> = _history.asStateFlow()
 
@@ -2112,7 +2120,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _channelsLoading.value = true
             YtMusicRepository.accountChannels()
-                .onSuccess { _channels.value = it }
+                .onSuccess {
+                    _channels.value = it
+                    persistDetectedProfiles(it)
+                }
             _channelsLoading.value = false
         }
     }
@@ -2204,14 +2215,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * asking", so keeping them across a switch shows the new channel the old
      * one's music until each page happens to be refetched.
      */
-    private fun clearListenerState() {
+\n    /** Selects an identity without ever allowing a response to replace it. */\n    fun selectProfile(accountId: String, selectedProfileId: String, supplied: YouTubeProfile? = null) {\n        val source = _googleAccounts.value.firstOrNull { it.accountId == accountId } ?: return\n        val profile = supplied ?: source.profiles.firstOrNull { it.profileId == selectedProfileId } ?: return\n        if (accountId == _activeAccountId.value && profile.profileId == _activeProfileId.value) return\n        cacheCurrentListener()\n        val updated = source.copy(\n            profiles = source.profiles.filterNot { it.profileId == profile.profileId } + profile,\n            activeProfileId = profile.profileId,\n        )\n        authStore.upsertSession(updated)\n        authStore.select(accountId, profile.profileId)\n        _googleAccounts.value = authStore.sessions\n        _activeAccountId.value = accountId\n        _activeProfileId.value = profile.profileId\n        authStore.cookie = updated.cookie\n        Innertube.cookie = updated.cookie\n        Innertube.selectChannel(profile.pageId, profile.dataSyncId, profile.authUser)\n        _selectedChannelKey.value = profile.profileId\n        _selectedChannelName.value = profile.name\n        StreamResolver.onSessionChanged()\n        clearListenerState(restoreCached = true)\n        reloadForAccount()\n    }\n\n    /** Returns false at an edge, allowing the avatar to play its elastic cue. */\n    fun stepProfile(forward: Boolean): Boolean {\n        val target = adjacentProfile(_googleAccounts.value, _activeAccountId.value, _activeProfileId.value, forward) ?: return false\n        selectProfile(target.first, target.second)\n        return true\n    }\n\n    fun removeAccount(accountId: String) {\n        val fallback = authStore.removeAccount(accountId)\n        _googleAccounts.value = authStore.sessions\n        if (fallback == null) { signOut(); return }\n        selectProfile(fallback.accountId, fallback.activeProfileId ?: fallback.profiles.firstOrNull()?.profileId ?: return)\n    }\n\n    private fun persistDetectedProfiles(channels: List<AccountChannel>) {\n        val accountId = _activeAccountId.value ?: return\n        val current = authStore.sessions.firstOrNull { it.accountId == accountId } ?: return\n        val detected = channels.map { channel ->\n            YouTubeProfile(\n                profileId(channel.pageId, channel.dataSyncId, channel.name),\n                channel.name, channel.subtitle, channel.thumbnailUrl,\n                channel.pageId, channel.dataSyncId,\n                isBrandAccount = channel.pageId != null,\n            )\n        }\n        val stale = if (detected.isEmpty()) emptySet() else current.profiles\n            .filter { it.profileId.startsWith("profile:") }\n            .map { it.profileId }\n            .toSet()\n        val profiles = current.profiles.filter { known ->\n            known.profileId !in stale && detected.none { it.profileId == known.profileId }\n        } + detected\n        val selected = when {\n            current.activeProfileId != null && current.activeProfileId !in stale -> current.activeProfileId\n            current.activeProfileId in stale -> detected.singleOrNull()?.profileId\n            else -> null\n        } ?: profiles.firstOrNull()?.profileId\n        authStore.upsertSession(current.copy(profiles = profiles, activeProfileId = selected), activate = false)\n        _googleAccounts.value = authStore.sessions\n    }\n
+    private fun cacheCurrentListener() {
+        val key = listenerKey() ?: return
+        listenerCache[key] = ListenerSnapshot(
+            _account.value, _library.value, _history.value, _playlists.value, _playlistOwned.value,
+        )
+    }
+
+    private fun listenerKey(): String? = _activeAccountId.value?.let { accountId ->
+        _activeProfileId.value?.let { profileId -> "$accountId:$profileId" }
+    }
+
+    private fun clearListenerState(restoreCached: Boolean = false) {
+        _account.value = null
         LikeState.clear()
+        _playlistsLoading.value = false
         _playlists.value = emptyList()
         _playlistOwned.value = emptyMap()
         ownershipInFlight.clear()
         _songMenu.value = null
         _library.value = UiState.Loading
         _history.value = UiState.Loading
+        if (restoreCached) listenerCache[listenerKey()]?.let { cached ->
+            _account.value = cached.account
+            _library.value = cached.library
+            _history.value = cached.history
+            _playlists.value = cached.playlists
+            _playlistOwned.value = cached.owned
+        }
     }
 
     /**

@@ -152,7 +152,7 @@ class AuthStore(context: Context) {
      * Signs out of YouTube Music only — the Discord login is a separate account.
      */
     fun signOut() {
-        prefs.edit().remove(KEY_COOKIE).apply()
+        prefs.edit().remove(KEY_COOKIE).remove(KEY_SESSIONS).remove(KEY_ACTIVE_ACCOUNT).remove(KEY_ACTIVE_PROFILE).apply()
         clearChannel()
         // The in-app browser keeps its own copy of the Google login, and a
         // sign-out that leaves it in place is not one: the next sign-in is
@@ -170,6 +170,9 @@ class AuthStore(context: Context) {
 
         private val API_SID_NAMES = setOf("SAPISID", "__Secure-3PAPISID", "__Secure-1PAPISID")
         private const val KEY_COOKIE = "cookie"
+        private const val KEY_SESSIONS = "google_account_sessions_v2"
+        private const val KEY_ACTIVE_ACCOUNT = "active_google_account_id_v2"
+        private const val KEY_ACTIVE_PROFILE = "active_youtube_profile_id_v2"
         private const val KEY_CHANNEL_PAGE_ID = "channel_page_id"
         private const val KEY_CHANNEL_DATASYNC_ID = "channel_datasync_id"
         private const val KEY_CHANNEL_NAME = "channel_name"
