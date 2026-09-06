@@ -1,4 +1,5 @@
 package com.music.bitchord.ui.components
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.ManageAccounts
@@ -272,123 +273,125 @@ fun TopBarAccountButton(
     val translation = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
-    IconButton(
-        onClick = { expanded = !expanded },
-        modifier = modifier
-            .graphicsLayer { translationY = translation.value }
-            .pointerInput(onSwipeProfile) {
-                if (onSwipeProfile == null) return@pointerInput
-                var drag = 0f
-                detectVerticalDragGestures(
-                    onVerticalDrag = { change, amount -> change.consume(); drag += amount },
-                    onDragEnd = {
-                        if (kotlin.math.abs(drag) < 28f) return@detectVerticalDragGestures
-                        if (!onSwipeProfile.invoke(drag > 0f)) scope.launch {
-                            translation.snapTo(if (drag > 0f) 9f else -9f)
-                            translation.animateTo(0f, spring())
-                        }
-                    },
-                )
-            },
-    ) {
-        val photo = account?.thumbnailUrl
-        if (photo != null) {
-            AsyncImage(
-                model = photo,
-                contentDescription = stringResource(R.string.switch_account),
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(AVATAR_SIZE).clip(CircleShape).thumbnailBorder(CircleShape),
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(AVATAR_SIZE)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .thumbnailBorder(CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Rounded.Person,
+    Box(modifier = modifier) {
+        IconButton(
+            onClick = { expanded = !expanded },
+            modifier = Modifier
+                .graphicsLayer { translationY = translation.value }
+                .pointerInput(onSwipeProfile) {
+                    if (onSwipeProfile == null) return@pointerInput
+                    var drag = 0f
+                    detectVerticalDragGestures(
+                        onVerticalDrag = { change, amount -> change.consume(); drag += amount },
+                        onDragEnd = {
+                            if (kotlin.math.abs(drag) < 28f) return@detectVerticalDragGestures
+                            if (!onSwipeProfile.invoke(drag > 0f)) scope.launch {
+                                translation.snapTo(if (drag > 0f) 9f else -9f)
+                                translation.animateTo(0f, spring())
+                            }
+                        },
+                    )
+                },
+        ) {
+            val photo = account?.thumbnailUrl
+            if (photo != null) {
+                AsyncImage(
+                    model = photo,
                     contentDescription = stringResource(R.string.switch_account),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(AVATAR_SIZE).clip(CircleShape).thumbnailBorder(CircleShape),
                 )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(AVATAR_SIZE)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .thumbnailBorder(CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Rounded.Person,
+                        contentDescription = stringResource(R.string.switch_account),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
         }
-    }
 
-    DropdownMenu(
-        expanded = expanded,
-        onDismissRequest = { expanded = false; managing = false },
-        modifier = Modifier.widthIn(min = 260.dp, max = 340.dp),
-    ) {
-        Text(
-            text = account?.name ?: "Pexpo account",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-        )
-        if (accounts.isEmpty()) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false; managing = false },
+            modifier = Modifier.widthIn(min = 260.dp, max = 340.dp),
+        ) {
+            Text(
+                text = account?.name ?: "Pexpo account",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+            )
+            if (accounts.isEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Sign in to an account") },
+                    onClick = {
+                        expanded = false
+                        onAddAccount?.invoke() ?: onClick()
+                    },
+                    leadingIcon = { Icon(Icons.Rounded.PersonAdd, null) },
+                )
+            } else {
+                accounts.forEach { googleAccount ->
+                    if (managing) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(if (googleAccount.accountId == activeAccountId) "${googleAccount.name} (current)" else googleAccount.name)
+                            },
+                            onClick = {
+                                viewModel.removeAccount(googleAccount.accountId)
+                                managing = false
+                                expanded = false
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null) },
+                        )
+                    } else {
+                        DropdownMenuItem(
+                            text = { Text(googleAccount.name) },
+                            onClick = {
+                                val profile = googleAccount.profiles.firstOrNull { it.profileId == activeProfileId }
+                                    ?: googleAccount.profiles.firstOrNull()
+                                if (profile != null) {
+                                    viewModel.selectProfile(googleAccount.accountId, profile.profileId, profile)
+                                }
+                                expanded = false
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.AccountCircle, null) },
+                        )
+                    }
+                }
+            }
+            HorizontalDivider()
             DropdownMenuItem(
-                text = { Text("Sign in to an account") },
+                text = { Text(if (managing) "Done" else "Manage accounts") },
+                onClick = { managing = !managing },
+                leadingIcon = { Icon(Icons.Rounded.ManageAccounts, null) },
+            )
+            DropdownMenuItem(
+                text = { Text("Add account") },
                 onClick = {
                     expanded = false
                     onAddAccount?.invoke() ?: onClick()
                 },
                 leadingIcon = { Icon(Icons.Rounded.PersonAdd, null) },
             )
-        } else {
-            accounts.forEach { googleAccount ->
-                if (managing) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(if (googleAccount.accountId == activeAccountId) "${googleAccount.name} (current)" else googleAccount.name)
-                        },
-                        onClick = {
-                            viewModel.removeAccount(googleAccount.accountId)
-                            managing = false
-                            expanded = false
-                        },
-                        leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null) },
-                    )
-                } else {
-                    DropdownMenuItem(
-                        text = { Text(googleAccount.name) },
-                        onClick = {
-                            val profile = googleAccount.profiles.firstOrNull { it.profileId == activeProfileId }
-                                ?: googleAccount.profiles.firstOrNull()
-                            if (profile != null) {
-                                viewModel.selectProfile(googleAccount.accountId, profile.profileId, profile)
-                            }
-                            expanded = false
-                        },
-                        leadingIcon = { Icon(Icons.Rounded.AccountCircle, null) },
-                    )
-                }
-            }
+            DropdownMenuItem(
+                text = { Text("Settings") },
+                onClick = {
+                    expanded = false
+                    onOpenSettings?.invoke() ?: onClick()
+                },
+                leadingIcon = { Icon(Icons.Rounded.Settings, null) },
+            )
         }
-        HorizontalDivider()
-        DropdownMenuItem(
-            text = { Text(if (managing) "Done" else "Manage accounts") },
-            onClick = { managing = !managing },
-            leadingIcon = { Icon(Icons.Rounded.ManageAccounts, null) },
-        )
-        DropdownMenuItem(
-            text = { Text("Add account") },
-            onClick = {
-                expanded = false
-                onAddAccount?.invoke() ?: onClick()
-            },
-            leadingIcon = { Icon(Icons.Rounded.PersonAdd, null) },
-        )
-        DropdownMenuItem(
-            text = { Text("Settings") },
-            onClick = {
-                expanded = false
-                onOpenSettings?.invoke() ?: onClick()
-            },
-            leadingIcon = { Icon(Icons.Rounded.Settings, null) },
-        )
     }
 }
 
