@@ -233,6 +233,17 @@
     <string name="animated_cover_art">Animated cover art</string>
     <string name="synced_lyrics">Synced lyrics</string>
     <string name="synced_lyrics_subtitle">Lights up the words on the player as they’re sung</string>
+    <string name="lyrics_translate">Translate lyrics</string>
+    <string name="lyrics_show_original">Show original lyrics</string>
+    <string name="lyrics_translation_language">Translation language</string>
+    <string name="lyrics_translation_language_subtitle">Language used for translated lyrics</string>
+    <string name="lyrics_translation_preparing">Detecting lyric language...</string>
+    <string name="lyrics_translation_downloading">Downloading %1$s translation...</string>
+    <string name="lyrics_translation_translating">Translating to %1$s...</string>
+    <string name="lyrics_translated_to">Translated to %1$s</string>
+    <string name="lyrics_already_in_language">Lyrics are already in %1$s</string>
+    <string name="lyrics_translation_unavailable">Translation unavailable</string>
+    <string name="lyrics_unsynced_preview">Lyrics</string>
     <string name="lyrics_sources">Lyrics sources</string>
     <string name="song_cache_limit">Song cache limit</string>
     <string name="clear_song_cache">Clear song cache</string>

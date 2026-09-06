@@ -18,6 +18,9 @@ import com.music.bitchord.data.lyrics.EmbeddedLyrics
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsRepository
 import com.music.bitchord.data.lyrics.LyricsSource
+import com.music.bitchord.data.lyrics.LyricsTranslation
+import com.music.bitchord.data.lyrics.LyricsTranslationStage
+import com.music.bitchord.data.lyrics.LyricsTranslationState
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.innertube.Innertube
 import com.music.bitchord.data.innertube.PlaybackTracker
@@ -229,7 +232,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _lyricsChecked = MutableStateFlow(false)
     val lyricsChecked: StateFlow<Boolean> = _lyricsChecked.asStateFlow()
 
+    private val _lyricsTranslation = MutableStateFlow<LyricsTranslationState>(LyricsTranslationState.Idle)
+    val lyricsTranslation: StateFlow<LyricsTranslationState> = _lyricsTranslation.asStateFlow()
+
     private var lyricsJob: Job? = null
+    private var lyricsTranslationJob: Job? = null
+    private val lyricsTranslationGeneration = AtomicLong(0L)
 
     /**
      * What the loaded lyrics are for. Both the track *and* the settings that
@@ -265,6 +273,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val key = videoId to sources
         if (lyricsFor == key) return
         lyricsFor = key
+        lyricsTranslationJob?.cancel()
+        lyricsTranslationGeneration.incrementAndGet()
+        _lyricsTranslation.value = LyricsTranslationState.Idle
         _lyrics.value = null
         _lyricsSource.value = null
         lyricsJob?.cancel()
@@ -304,6 +315,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _lyricsSource.value = found?.source
             _lyricsChecked.value = true
         }
+    }
+
+    fun translateLyrics() {
+        val sourceLines = _lyrics.value?.takeIf { it.isNotEmpty() } ?: return
+        val trackId = lyricsFor?.first ?: return
+        val target = AppSettings.lyricsTranslationLanguage.value
+        if (_lyricsTranslation.value is LyricsTranslationState.Loading) return
+        lyricsTranslationJob?.cancel()
+        val generation = lyricsTranslationGeneration.incrementAndGet()
+        lyricsTranslationJob = viewModelScope.launch {
+            LyricsTranslation.translate(sourceLines, target) { stage ->
+                if (generation == lyricsTranslationGeneration.get() && lyricsFor?.first == trackId) {
+                    _lyricsTranslation.value = LyricsTranslationState.Loading(target, stage)
+                }
+            }.also { result ->
+                if (generation == lyricsTranslationGeneration.get() && lyricsFor?.first == trackId) {
+                    _lyricsTranslation.value = result
+                }
+            }
+        }
+    }
+
+    fun showOriginalLyrics() {
+        lyricsTranslationJob?.cancel()
+        lyricsTranslationGeneration.incrementAndGet()
+        _lyricsTranslation.value = LyricsTranslationState.Idle
     }
 
     private val _account = MutableStateFlow<Account?>(null)

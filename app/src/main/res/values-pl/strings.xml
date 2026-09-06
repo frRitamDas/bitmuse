@@ -195,6 +195,17 @@
     <string name="synced_lyrics">Zsynchronizowany tekst</string>
     <string name="synced_lyrics_subtitle">Podświetla słowa na odtwarzaczu w miarę ich śpiewania</string>
     <string name="lyrics_sources">Źródła tekstów</string>
+    <string name="lyrics_translate">Przetłumacz tekst</string>
+    <string name="lyrics_show_original">Pokaż oryginalny tekst</string>
+    <string name="lyrics_translation_language">Język tłumaczenia</string>
+    <string name="lyrics_translation_language_subtitle">Język używany do tłumaczenia tekstów</string>
+    <string name="lyrics_translation_preparing">Wykrywanie języka tekstu...</string>
+    <string name="lyrics_translation_downloading">Pobieranie tłumaczenia na %1$s...</string>
+    <string name="lyrics_translation_translating">Tłumaczenie na %1$s...</string>
+    <string name="lyrics_translated_to">Przetłumaczono na %1$s</string>
+    <string name="lyrics_already_in_language">Tekst jest już w języku %1$s</string>
+    <string name="lyrics_translation_unavailable">Tłumaczenie niedostępne</string>
+    <string name="lyrics_unsynced_preview">Tekst piosenki</string>
     <string name="song_cache_limit">Limit pamięci podręcznej utworów</string>
     <string name="clear_song_cache">Wyczyść pamięć podręczną utworów</string>
     <string name="clear_song_cache_subtitle">Zwalnia miejsce zajmowane przez pobrane pliki audio</string>
