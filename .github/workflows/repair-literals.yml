@@ -21,16 +21,13 @@ jobs:
           from pathlib import Path
           p = Path('app/src/main/java/com/music/bitchord/ui/MainViewModel.kt')
           s = p.read_text()
-          start = s.find(r'\n    /** Selects an identity without ever allowing a response to replace it. */')
-          end = s.find('\n\n    private fun cacheCurrentListener', start)
-          if start != -1 and end != -1:
-              block = s[start:end].replace('\\n', '\n')
-              s = s[:start] + block + s[end:]
+          s = s.replace('\\n', '\n')
           p.write_text(s)
       - name: Commit repair
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/src/main/java/com/music/bitchord/ui/MainViewModel.kt
+          git diff --cached --quiet && exit 0
           git commit -m "Repair generated source literals"
           git push origin HEAD:main
