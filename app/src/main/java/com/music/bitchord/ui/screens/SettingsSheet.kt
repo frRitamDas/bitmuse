@@ -1061,25 +1061,25 @@ fun SettingsScreen(
 
         Text(
             text = buildAnnotatedString {
-                append("bitchord $version  ")
+                append("pexpo $version  ")
                 val linkStyles = TextLinkStyles(
                     style = SpanStyle(
                         color = MaterialTheme.colorScheme.primary,
                         textDecoration = TextDecoration.Underline,
                     ),
                 )
-                withLink(LinkAnnotation.Url("https://github.com/kushagrasinghx/BitChord", linkStyles)) {
-                    append("GitHub")
+                withLink(LinkAnnotation.Url("https://ritamdas.xo.je/", linkStyles)) {
+                    append("Portfolio")
                 }
                 append("  ")
-                withLink(LinkAnnotation.Url("https://github.com/kushagrasinghx", linkStyles)) {
-                    append("Developer")
+                withLink(LinkAnnotation.Url("https://instagram.com/arxyuk", linkStyles)) {
+                    append("Instagram")
                 }
                 append("  ")
-                withLink(LinkAnnotation.Url("https://discord.gg/pDdKfrdHY6", linkStyles)) {
+                withLink(LinkAnnotation.Url("https://discord.gg/8xgQ7smQPP", linkStyles)) {
                     append("Discord")
                 }
-                append("\n~YouTube Music Backend")
+                append("\n~A Project By Ritam Das")
             },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
