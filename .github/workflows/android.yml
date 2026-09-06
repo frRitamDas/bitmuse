@@ -2,6 +2,7 @@ name: Android CI
 
 on: [push, pull_request]
 
+# Rebuild after the Android namespace/package alignment fix.
 jobs:
   build-dev-debug:
     if: github.ref != 'refs/heads/main'
@@ -10,25 +11,20 @@ jobs:
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
-
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
         cache: gradle
-
     - name: Setup local.properties
       run: |
         echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
         echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
-
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-
     - name: Build Dev Debug APK
       run: ./gradlew assembleDevDebug
-
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
@@ -38,35 +34,28 @@ jobs:
   build-prod-release:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
-
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
         cache: gradle
-
     - name: Setup Secrets (Keystore & local.properties)
       run: |
         echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
         echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
-
         echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > bitchord-release.jks
         echo "storeFile=bitchord-release.jks" > keystore.properties
         echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" >> keystore.properties
         echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> keystore.properties
         echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> keystore.properties
-
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-
     - name: Build Signed Prod Release APK
-      run: ./gradlew assembleProdRelease
-
+      run: ./gradlew assembleProdRelease --stacktrace
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
