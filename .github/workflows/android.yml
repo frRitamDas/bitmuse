@@ -31,12 +31,11 @@ jobs:
         path: app/build/outputs/apk/dev/debug/*.apk
 
   build-prod-release:
-    if: github.ref != 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v5
-      
     - name: Set up JDK 17
       uses: actions/setup-java@v5
       with:
