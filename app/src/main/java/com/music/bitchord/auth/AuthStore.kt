@@ -6,28 +6,12 @@ import com.music.bitchord.data.DebugLog as Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
-/**
- * Encrypted-at-rest storage for credentials.
- *
- * Two live here: the YouTube Music session cookie, and — if the user turns on
- * the Discord integration — that account's own bearer token. Neither is a
- * password: the Google one is typed into accounts.google.com inside a WebView,
- * and the Discord one is read out of a completed login session. But both grant
- * full access to their account, so they don't go in the plain prefs the
- * scrobbler tokens use.
- *
- * Keystore init fails on a handful of OEM builds, so it degrades to plain
- * prefs rather than crashing on launch.
- */
 class AuthStore(context: Context) {
-
     private val prefs: SharedPreferences = runCatching {
         EncryptedSharedPreferences.create(
             context,
             "bitchord_auth",
-            MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build(),
+            MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
@@ -40,11 +24,6 @@ class AuthStore(context: Context) {
         get() = prefs.getString(KEY_COOKIE, null)
         set(value) = prefs.edit().putString(KEY_COOKIE, value).apply()
 
-    /**
-     * The durable account registry. Credentials remain in this encrypted store;
-     * the old single-cookie entry is migrated lazily so an update never logs a
-     * listener out.
-     */
     var sessions: List<GoogleAccountSession>
         get() {
             val saved = sessionsFromJson(prefs.getString(KEY_SESSIONS, null))
@@ -59,8 +38,10 @@ class AuthStore(context: Context) {
                 isBrandAccount = channelPageId != null,
             )
             return listOf(GoogleAccountSession(
-                accountId = sessionId(legacy, channelDataSyncId), cookie = legacy,
-                profiles = listOf(profile), activeProfileId = profile.profileId,
+                accountId = sessionId(legacy, channelDataSyncId),
+                cookie = legacy,
+                profiles = listOf(profile),
+                activeProfileId = profile.profileId,
             )).also { replaceSessions(it) }
         }
         set(value) = replaceSessions(value)
@@ -74,12 +55,10 @@ class AuthStore(context: Context) {
         set(value) = prefs.edit().putString(KEY_ACTIVE_PROFILE, value).apply()
 
     val activeSession: GoogleAccountSession?
-        get() = sessions.firstOrNull { it.accountId == activeAccountId }
-            ?: sessions.firstOrNull()
+        get() = sessions.firstOrNull { it.accountId == activeAccountId } ?: sessions.firstOrNull()
 
-    fun replaceSessions(value: List<GoogleAccountSession>) {
+    fun replaceSessions(value: List<GoogleAccountSession>) =
         prefs.edit().putString(KEY_SESSIONS, value.toJson()).apply()
-    }
 
     fun upsertSession(session: GoogleAccountSession, activate: Boolean = true) {
         val next = sessions.filterNot { it.accountId == session.accountId } + session
@@ -104,48 +83,52 @@ class AuthStore(context: Context) {
     val isSignedIn: Boolean
         get() = activeSession?.cookie?.let { hasApiSid(it) } == true
 
-    /** The Discord account's bearer token. See DiscordRPC for why a user token. */
     var discordToken: String?
         get() = prefs.getString(KEY_DISCORD_TOKEN, null)
         set(value) = prefs.edit().putString(KEY_DISCORD_TOKEN, value).apply()
 
-    /**
-     * Signs out of YouTube Music only — the Discord login is a separate account.
-     */
+    val channelPageId: String? get() = prefs.getString(KEY_CHANNEL_PAGE_ID, null)
+    val channelDataSyncId: String? get() = prefs.getString(KEY_CHANNEL_DATASYNC_ID, null)
+    val channelName: String? get() = prefs.getString(KEY_CHANNEL_NAME, null)
+    val channelAuthUser: String? get() = prefs.getString(KEY_CHANNEL_AUTH_USER, null)
+
+    fun selectChannel(pageId: String?, dataSyncId: String?, name: String?, authUser: String? = null) =
+        prefs.edit()
+            .putString(KEY_CHANNEL_PAGE_ID, pageId)
+            .putString(KEY_CHANNEL_DATASYNC_ID, dataSyncId)
+            .putString(KEY_CHANNEL_NAME, name)
+            .putString(KEY_CHANNEL_AUTH_USER, authUser)
+            .apply()
+
+    fun setChannelName(name: String?) = prefs.edit().putString(KEY_CHANNEL_NAME, name).apply()
+
+    fun clearChannel() = prefs.edit()
+        .remove(KEY_CHANNEL_PAGE_ID)
+        .remove(KEY_CHANNEL_DATASYNC_ID)
+        .remove(KEY_CHANNEL_NAME)
+        .remove(KEY_CHANNEL_AUTH_USER)
+        .apply()
+
+    fun onNewSession(cookie: String) {
+        this.cookie = cookie
+        clearChannel()
+    }
+
     fun signOut() {
         prefs.edit().remove(KEY_COOKIE).remove(KEY_SESSIONS)
             .remove(KEY_ACTIVE_ACCOUNT).remove(KEY_ACTIVE_PROFILE).apply()
         clearChannel()
-        // The in-app browser keeps its own copy of the Google login, and a
-        // sign-out that leaves it in place is not one: the next sign-in is
-        // waved straight through as the account just signed out of, with no
-        // opportunity to choose another. See [BrowserSession].
         BrowserSession.clearGoogleCookies()
     }
 
     companion object {
-        /**
-         * Whether a cookie header carries a secret Innertube requests can be
-         * signed with.
-         *
-         * Matched on the cookie *name*, which reads as pedantry and is not. The
-         * test used to be `cookie.contains("SAPISID")`, and `__Secure-3PAPISID`
-         * contains "SAPISID" — so a jar holding only the `__Secure-` forms, which
-         * is what a partitioned-cookie login produces, passed a check for a
-         * cookie it did not have. The app then declared itself signed in and made
-         * every request unsigned, which Google answers as a stranger. Library
-         * reads degraded quietly and history was never written at all.
-         */
-        fun hasApiSid(cookieHeader: String): Boolean =
-            cookieHeader.split(';').any { entry ->
-                val name = entry.substringBefore('=').trim()
-                val value = entry.substringAfter('=', "").trim()
-                name in API_SID_NAMES && value.isNotEmpty()
-            }
+        fun hasApiSid(cookieHeader: String): Boolean = cookieHeader.split(';').any { entry ->
+            val name = entry.substringBefore('=').trim()
+            val value = entry.substringAfter('=', "").trim()
+            name in API_SID_NAMES && value.isNotEmpty()
+        }
 
-        private val API_SID_NAMES =
-            setOf("SAPISID", "__Secure-3PAPISID", "__Secure-1PAPISID")
-
+        private val API_SID_NAMES = setOf("SAPISID", "__Secure-3PAPISID", "__Secure-1PAPISID")
         private const val KEY_COOKIE = "cookie"
         private const val KEY_SESSIONS = "google_account_sessions_v2"
         private const val KEY_ACTIVE_ACCOUNT = "active_google_account_id_v2"
