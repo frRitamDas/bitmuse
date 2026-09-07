@@ -2,6 +2,7 @@ package com.music.bitchord.data
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -65,7 +66,7 @@ object AppUpdateChecker {
     @Volatile
     private var downloadCancelled = false
 
-    suspend fun check() = withContext(Dispatchers.IO) {
+    suspend fun check(context: Context) = withContext(Dispatchers.IO) {
         runCatching {
             val request = Request.Builder().url(LATEST_RELEASE_URL).build()
             val body = Http.client.newCall(request).execute().use { response ->
@@ -74,7 +75,7 @@ object AppUpdateChecker {
             val release = json.parseToJsonElement(body) as? JsonObject ?: return@runCatching
             val tag = release["tag_name"]?.jsonPrimitive?.contentOrNull ?: return@runCatching
             val url = release["html_url"]?.jsonPrimitive?.contentOrNull ?: return@runCatching
-            val apkUrl = apkAssetUrl(release)
+            val apkUrl = apkAssetUrl(release, installedVariant(context))
             val notes = release["body"]?.jsonPrimitive?.contentOrNull
             val latest = tag.removePrefix("v")
             if (isNewer(latest, BuildConfig.VERSION_NAME)) {
@@ -99,13 +100,18 @@ object AppUpdateChecker {
      * [UpdateInfo.apkUrl] null and the UI falls back to opening the releases
      * page as before.
      */
-    private fun apkAssetUrl(release: JsonObject): String? = runCatching {
+    private fun apkAssetUrl(release: JsonObject, variant: String): String? = runCatching {
         release["assets"]?.jsonArray
             ?.mapNotNull { it as? JsonObject }
-            ?.firstOrNull { asset ->
+            ?.filter { asset ->
                 asset["name"]?.jsonPrimitive?.contentOrNull?.endsWith(".apk", ignoreCase = true) == true &&
                     asset["state"]?.jsonPrimitive?.contentOrNull == "uploaded"
             }
+            ?.sortedBy { asset ->
+                val name = asset["name"]?.jsonPrimitive?.contentOrNull.orEmpty().lowercase()
+                if (name.contains("-$variant.apk")) 0 else if (name.contains("-universal.apk")) 1 else 2
+            }
+            ?.firstOrNull()
             ?.get("browser_download_url")
             ?.jsonPrimitive
             ?.contentOrNull
@@ -127,7 +133,7 @@ object AppUpdateChecker {
             val dir = File(context.cacheDir, CACHE_SUBDIR).apply { mkdirs() }
             // Drop anything left over from an earlier attempt.
             dir.listFiles()?.forEach { it.delete() }
-            val target = File(dir, "bitchord-${info.version}.apk")
+            val target = File(dir, "pexpo-${info.version}.apk")
 
             val request = Request.Builder().url(url).build()
             Http.client.newCall(request).execute().use { response ->
@@ -205,6 +211,26 @@ object AppUpdateChecker {
                         Intent.FLAG_ACTIVITY_NEW_TASK,
                 ),
         )
+    }
+
+    /**
+     * Detects the APK family that is actually installed. A monolithic APK has
+     * no split names and is the universal build; an ABI APK has a config split.
+     * This is deliberately based on PackageInfo rather than the device ABI:
+     * an arm64 phone can have the universal APK installed, and must receive the
+     * universal APK again as requested by the user.
+     */
+    private fun installedVariant(context: Context): String {
+        val splits = runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).splitNames.orEmpty()
+        }.getOrDefault(emptyArray())
+        val joined = splits.joinToString(" ").lowercase()
+        return when {
+            joined.contains("arm64") || joined.contains("arm64_v8a") -> "arm64-v8a"
+            joined.contains("armeabi") || joined.contains("armeabi_v7a") -> "armeabi-v7a"
+            joined.contains("x86_64") -> "x86_64"
+            else -> "universal"
+        }
     }
 
     /** Numeric, dot-separated comparison — "1.10" outranks "1.9". */

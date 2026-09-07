@@ -88,7 +88,6 @@ fun AccountAndScrobblingScreen(
             SettingsGroup {
                 DestructiveRow(label = "Sign out", onClick = onSignOut)
             }
-            SettingsGroup { DestructiveRow(label = stringResource(R.string.sign_out), onClick = onSignOut) }
         }
 
         SettingsGroup(header = stringResource(R.string.rich_presence), footer = stringResource(R.string.rich_presence_footer)) {

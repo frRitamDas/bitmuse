@@ -1,4 +1,5 @@
 package com.music.bitchord
+import com.music.bitchord.ui.components.AccountProfileSelector
 
 import android.Manifest
 import android.content.Intent
@@ -508,6 +509,9 @@ private fun BitChordApp(
     val libraryState by viewModel.library.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val signedIn by viewModel.signedIn.collectAsStateWithLifecycle()
+    val googleAccounts by viewModel.googleAccounts.collectAsStateWithLifecycle()
+    val activeAccountId by viewModel.activeAccountId.collectAsStateWithLifecycle()
+    val activeProfileId by viewModel.activeProfileId.collectAsStateWithLifecycle()
     val account by viewModel.account.collectAsStateWithLifecycle()
     val channels by viewModel.channels.collectAsStateWithLifecycle()
     val channelsLoading by viewModel.channelsLoading.collectAsStateWithLifecycle()
@@ -2334,9 +2338,7 @@ private fun BitChordApp(
                             TopBarDownloadButton(onClick = { showDownloadManager = true })
                             TopBarAccountButton(
                                 account = account,
-                                onClick = { showSettings = true },
-                                onAddAccount = { webSession = WebSessionMode.SIGN_IN },
-                                onOpenSettings = { showSettings = true },
+                                onClick = { showAccountSelector = true },
                                 onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
                             )
                         }
@@ -2933,6 +2935,32 @@ private fun BitChordApp(
                     )
                 }
             }
+        }
+
+        if (showAccountSelector) {
+            BackHandler { showAccountSelector = false }
+            AccountProfileSelector(
+                accounts = googleAccounts,
+                activeAccountId = activeAccountId,
+                activeProfileId = activeProfileId,
+                hazeState = hazeState,
+                onSelect = { selectedAccount, profile ->
+                    viewModel.selectProfile(selectedAccount.accountId, profile.profileId, profile)
+                    showAccountSelector = false
+                },
+                onAddAccount = {
+                    showAccountSelector = false
+                    webSession = WebSessionMode.SIGN_IN
+                },
+                onRemoveAccount = { selectedAccount ->
+                    viewModel.removeAccount(selectedAccount.accountId)
+                },
+                onOpenSettings = {
+                    showAccountSelector = false
+                    showSettings = true
+                },
+                onDismiss = { showAccountSelector = false },
+            )
         }
 
         // ---- Update available (once per launch) ----
