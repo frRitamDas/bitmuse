@@ -28,8 +28,8 @@ android {
         applicationId = "com.pexpo.music"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.5.2"
+        versionCode = 15
+        versionName = "1.5.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "LASTFM_API_KEY", "\"${lastfmApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "LASTFM_SECRET", "\"${lastfmSecret.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
@@ -56,7 +56,7 @@ android {
         create("dev") {
             dimension = "env"
             applicationId = "com.dev.bitchord"
-            resValue("string", "app_name", "BitChord Dev")
+            resValue("string", "app_name", "Pexpo Music Dev")
         }
         create("prod") {
             dimension = "env"
