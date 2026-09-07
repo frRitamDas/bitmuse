@@ -329,7 +329,7 @@ class AddonClient(rawBaseUrl: String) {
     private fun keyOf(vararg parts: String) = parts.joinToString("|") { "${it.length}:$it" }
 
     companion object {
-        private const val TAG = "BitChord"
+        private const val TAG = "Pexpo"
 
         /** The tiers [AddonSource][com.music.bitchord.data.sources.AddonSource] asks in. */
         const val TIER_LOSSLESS = "LOSSLESS"
@@ -413,7 +413,7 @@ class AddonClient(rawBaseUrl: String) {
         private const val BACKOFF_BASE_MS = 500L
         private const val BACKOFF_CAP_MS = 8_000L
 
-        private const val USER_AGENT = "BitChord"
+        private const val USER_AGENT = "Pexpo"
 
         /**
          * What [probeSearch] asks for. Deliberately an ordinary word rather

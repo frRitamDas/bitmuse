@@ -34,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap
 /** Suspend API over Innertube. Every call returns a Result so the UI can show a real error. */
 object YtMusicRepository {
 
-    private const val TAG = "BitChord"
+    private const val TAG = "Pexpo"
     private val moodGenreShelfCache = ConcurrentHashMap<String, List<HomeShelf>>()
 
     /**

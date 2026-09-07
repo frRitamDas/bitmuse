@@ -341,7 +341,7 @@ class AddonSource(
     }
 
     private companion object {
-        const val TAG = "BitChord"
+        const val TAG = "Pexpo"
 
         /** How many search rows to remember. A long queue's worth, several times over. */
         const val MAX_ROWS = 256

@@ -187,7 +187,7 @@ class ChunkedDataSource(
     }
 
     private companion object {
-        const val TAG = "BitChord"
+        const val TAG = "Pexpo"
 
         /** Enough to ride out a truncated range, not enough to hang on a dead one. */
         const val MAX_EMPTY_RANGES = 3

@@ -48,7 +48,7 @@ sealed interface DetectedFormat {
 
 object SourceFormats {
 
-    private const val TAG = "BitChord"
+    private const val TAG = "Pexpo"
 
     private val json = Json {
         isLenient = true
@@ -210,7 +210,7 @@ object SourceFormats {
     private suspend fun fetch(url: String): Result<String> = runCatching {
         val request = Request.Builder().url(url)
             .header("Accept", "application/json")
-            .header("User-Agent", "BitChord")
+            .header("User-Agent", "Pexpo")
             .build()
         Http.client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {

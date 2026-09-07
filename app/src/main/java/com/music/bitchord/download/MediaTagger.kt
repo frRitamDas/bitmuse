@@ -36,7 +36,7 @@ import kotlin.math.max
  */
 object MediaTagger {
 
-    private const val TAG = "BitChord"
+    private const val TAG = "Pexpo"
 
     /** Long side of the embedded cover — plenty for a lock screen or a car head unit, without ballooning the file. */
     private const val COVER_MAX_SIDE = 1000

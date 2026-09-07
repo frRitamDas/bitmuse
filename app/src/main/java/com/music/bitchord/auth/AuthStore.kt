@@ -16,7 +16,7 @@ class AuthStore(context: Context) {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
     }.getOrElse {
-        Log.w("BitChord", "EncryptedSharedPreferences unavailable, falling back: ${it.message}")
+        Log.w("Pexpo", "EncryptedSharedPreferences unavailable, falling back: ${it.message}")
         context.getSharedPreferences("bitchord_auth_plain", Context.MODE_PRIVATE)
     }
 

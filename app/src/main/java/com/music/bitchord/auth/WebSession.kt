@@ -72,7 +72,7 @@ object BrowserSession {
         // a reason for the next sign-in to be less convenient, not a reason for
         // signing out to crash.
         val manager = runCatching { CookieManager.getInstance() }.getOrElse {
-            Log.w("BitChord", "no cookie manager to clear: ${it.message}")
+            Log.w("Pexpo", "no cookie manager to clear: ${it.message}")
             return
         }
         var cleared = 0
@@ -92,7 +92,7 @@ object BrowserSession {
             }
         }
         runCatching { manager.flush() }
-        Log.d("BitChord", "cleared $cleared browser cookies for Google")
+        Log.d("Pexpo", "cleared $cleared browser cookies for Google")
     }
 
     private val GOOGLE_ORIGINS = listOf(

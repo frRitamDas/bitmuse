@@ -63,7 +63,7 @@ data class SourceConfig(
  */
 object SourceRegistry {
 
-    private const val TAG = "BitChord"
+    private const val TAG = "Pexpo"
 
     private lateinit var prefs: SharedPreferences
 

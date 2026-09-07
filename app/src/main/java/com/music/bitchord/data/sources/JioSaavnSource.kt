@@ -5,7 +5,7 @@ import com.music.bitchord.data.jiosaavn.JioSaavnService
 import com.music.bitchord.data.jiosaavn.prioritizeExplicit
 import com.music.bitchord.data.model.Song
 
-private const val TAG = "BitChord"
+private const val TAG = "Pexpo"
 
 class JioSaavnSource(
     override val config: SourceConfig,

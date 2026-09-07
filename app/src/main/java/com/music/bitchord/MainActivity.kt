@@ -605,6 +605,24 @@ private fun BitChordApp(
 
     val controller = rememberMediaController()
     val player = rememberPlayerState(controller)
+
+    // Samsung/One UI can briefly detach and recreate the MediaController while
+    // the foreground activity remains alive. During that hand-off
+    // rememberPlayerState can legitimately expose a null current item for one
+    // or two frames. Driving the mini-player visibility directly from that
+    // transient null made the bottom transport jump upward and disappear.
+    // Hold the last known track through a short controller hand-off; a genuine
+    // stop still clears it promptly. This is UI-only and never changes playback.
+    var visiblePlayerSong by remember { mutableStateOf<Song?>(null) }
+    LaunchedEffect(player.song?.videoId) {
+        val current = player.song
+        if (current != null) {
+            visiblePlayerSong = current
+        } else {
+            kotlinx.coroutines.delay(1500)
+            if (player.song == null) visiblePlayerSong = null
+        }
+    }
     val shuffleEnabled by QueueShuffle.enabled.collectAsStateWithLifecycle()
     // A conversion is deliberately scoped to the current listening session.
     // Keeping the complete original row here lets Revert restore the exact
@@ -2347,7 +2365,7 @@ private fun BitChordApp(
 
                 // Drawn before the bars so their own glass reads on top of it.
                 BottomFadeScrim(
-                    withMiniPlayer = player.song != null && !playerDocked,
+                    withMiniPlayer = visiblePlayerSong != null && !playerDocked,
                     // Not the wash: by the foot of the screen the page has finished
                     // easing out of it and into this, so this is what is actually
                     // under the tab bar.
@@ -2387,7 +2405,7 @@ private fun BitChordApp(
                         selectedIndex = selectedTab,
                         onTabSelected = onTabSelected,
                         scrollConnection = navBarScroll,
-                        song = player.song?.takeUnless { playerDocked },
+                        song = visiblePlayerSong?.takeUnless { playerDocked },
                         isPlaying = player.isPlaying,
                         isLoading = player.isLoading,
                         onPlayPause = {
@@ -2417,7 +2435,7 @@ private fun BitChordApp(
                     // Only where the player isn't already open beside the page:
                     // a bar whose whole job is to stand in for the player, next
                     // to the player, is a second copy of what is already there.
-                    player.song?.takeUnless { playerDocked }?.let { song ->
+                    visiblePlayerSong?.takeUnless { playerDocked }?.let { song ->
                         MiniPlayer(
                             song = song,
                             isPlaying = player.isPlaying,

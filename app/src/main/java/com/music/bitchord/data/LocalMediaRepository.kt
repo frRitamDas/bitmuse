@@ -22,7 +22,7 @@ import java.util.Locale
 
 object LocalMediaRepository {
 
-    private const val TAG = "BitChord"
+    private const val TAG = "Pexpo"
     private const val MIN_LOCAL_MUSIC_DURATION_MS = 30_000L
 
     private val localMusicExtensions = setOf(

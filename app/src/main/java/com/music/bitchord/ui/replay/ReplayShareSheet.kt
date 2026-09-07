@@ -280,7 +280,7 @@ private suspend fun saveToGallery(
     bitmap: Bitmap,
     label: String,
 ): Boolean = withContext(Dispatchers.IO) {
-    val name = "bitchord-replay-${label.replace(' ', '-').lowercase(Locale.ROOT)}.png"
+    val name = "pexpo-replay-${label.replace(' ', '-').lowercase(Locale.ROOT)}.png"
     runCatching {
         val values = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, name)

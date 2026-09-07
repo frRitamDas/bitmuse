@@ -25,7 +25,7 @@ import kotlinx.serialization.json.jsonObject
 private const val MUSIC_ORIGIN = "https://music.youtube.com"
 private const val LOGIN_URL = "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true&continue=https%3A%2F%2Fmusic.youtube.com%2F"
 private val LOGOUT_THEN_LOGIN_URL = "https://accounts.google.com/Logout?continue=${Uri.encode(LOGIN_URL)}"
-private const val TAG = "BitChord"
+private const val TAG = "Pexpo"
 
 /**
  * In-app Google sign-in for YouTube Music, and the way to change which channel

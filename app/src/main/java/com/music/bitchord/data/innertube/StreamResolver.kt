@@ -79,7 +79,7 @@ import java.util.Locale
  */
 object StreamResolver {
 
-    private const val TAG = "BitChord"
+    private const val TAG = "Pexpo"
 
     /** Past this, an extractor fetch is worth flagging rather than just noting. */
     private const val SLOW_FETCH_MS = 2000L
