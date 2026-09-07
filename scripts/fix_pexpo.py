@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 ROOT = Path('.')
 
@@ -13,13 +14,19 @@ def add_import(text: str, imp: str) -> str:
 def patch_branding() -> None:
     for path in ROOT.glob('app/src/main/res/**/strings.xml'):
         text = path.read_text(encoding='utf-8')
-        new = text.replace('BitChord', 'Pexpo')
+        new = text.replace('BitChord', 'Pexpo').replace('bitchord %1$s', 'Pexpo %1$s')
         if new != text:
             path.write_text(new, encoding='utf-8')
 
+    # Visible/exported labels only. Never rename the Kotlin/package compatibility
+    # identifiers such as BitChordTheme or com.music.bitchord.
     for path in ROOT.glob('app/src/main/java/**/*.kt'):
         text = path.read_text(encoding='utf-8')
-        new = text.replace('Music/BitChord', 'Music/Pexpo')
+        new = text
+        new = new.replace('Music/BitChord', 'Music/Pexpo')
+        new = new.replace('text = "BitChord"', 'text = "Pexpo"')
+        new = new.replace('appendLine("BitChord log —', 'appendLine("Pexpo log —')
+        new = new.replace('That doesn\'t look like a BitChord backup', "That doesn't look like a Pexpo backup")
         if new != text:
             path.write_text(new, encoding='utf-8')
 
@@ -54,142 +61,59 @@ fun TopBarAccountButton(
     onClick: () -> Unit,
     onSwipeProfile: ((forward: Boolean) -> Boolean)? = null,
     modifier: Modifier = Modifier,
-    onAddAccount: (() -> Unit)? = null,
-    onOpenSettings: (() -> Unit)? = null,
 ) {
-    val viewModel: MainViewModel = viewModel()
-    val accounts by viewModel.googleAccounts.collectAsStateWithLifecycle()
-    val activeAccountId by viewModel.activeAccountId.collectAsStateWithLifecycle()
-    val activeProfileId by viewModel.activeProfileId.collectAsStateWithLifecycle()
-    var expanded by remember { mutableStateOf(false) }
-    var managing by remember { mutableStateOf(false) }
     val translation = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
 
-    Box(modifier = modifier) {
-        IconButton(
-            onClick = { expanded = !expanded },
-            modifier = Modifier
-                .graphicsLayer { translationY = translation.value }
-                .pointerInput(onSwipeProfile) {
-                    if (onSwipeProfile == null) return@pointerInput
-                    var drag = 0f
-                    detectVerticalDragGestures(
-                        onVerticalDrag = { change, amount -> change.consume(); drag += amount },
-                        onDragEnd = {
-                            if (kotlin.math.abs(drag) < 28f) return@detectVerticalDragGestures
-                            if (!onSwipeProfile.invoke(drag > 0f)) scope.launch {
-                                translation.snapTo(if (drag > 0f) 9f else -9f)
-                                translation.animateTo(0f, spring())
-                            }
-                        },
-                    )
-                },
-        ) {
-            val photo = account?.thumbnailUrl
-            if (photo != null) {
-                AsyncImage(
-                    model = photo,
-                    contentDescription = stringResource(R.string.switch_account),
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(AVATAR_SIZE).clip(CircleShape).thumbnailBorder(CircleShape),
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(AVATAR_SIZE)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .thumbnailBorder(CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Rounded.Person,
-                        contentDescription = stringResource(R.string.switch_account),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-        }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false; managing = false },
-            modifier = Modifier.widthIn(min = 260.dp, max = 340.dp),
-        ) {
-            Text(
-                text = account?.name ?: "Pexpo account",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-            )
-            if (accounts.isEmpty()) {
-                DropdownMenuItem(
-                    text = { Text("Sign in to an account") },
-                    onClick = {
-                        expanded = false
-                        onAddAccount?.invoke() ?: onClick()
+    IconButton(
+        onClick = onClick,
+        modifier = modifier
+            .graphicsLayer { translationY = translation.value }
+            .pointerInput(onSwipeProfile) {
+                if (onSwipeProfile == null) return@pointerInput
+                var drag = 0f
+                detectVerticalDragGestures(
+                    onVerticalDrag = { change, amount -> change.consume(); drag += amount },
+                    onDragEnd = {
+                        if (kotlin.math.abs(drag) < 28f) return@detectVerticalDragGestures
+                        if (!onSwipeProfile.invoke(drag > 0f)) scope.launch {
+                            translation.snapTo(if (drag > 0f) 9f else -9f)
+                            translation.animateTo(0f, spring())
+                        }
                     },
-                    leadingIcon = { Icon(Icons.Rounded.PersonAdd, null) },
                 )
-            } else {
-                accounts.forEach { googleAccount ->
-                    if (managing) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(if (googleAccount.accountId == activeAccountId) "${googleAccount.name} (current)" else googleAccount.name)
-                            },
-                            onClick = {
-                                viewModel.removeAccount(googleAccount.accountId)
-                                managing = false
-                                expanded = false
-                            },
-                            leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null) },
-                        )
-                    } else {
-                        DropdownMenuItem(
-                            text = { Text(googleAccount.name) },
-                            onClick = {
-                                val profile = googleAccount.profiles.firstOrNull { it.profileId == activeProfileId }
-                                    ?: googleAccount.profiles.firstOrNull()
-                                if (profile != null) {
-                                    viewModel.selectProfile(googleAccount.accountId, profile.profileId, profile)
-                                }
-                                expanded = false
-                            },
-                            leadingIcon = { Icon(Icons.Rounded.AccountCircle, null) },
-                        )
-                    }
-                }
+            },
+    ) {
+        val photo = account?.thumbnailUrl
+        if (photo != null) {
+            AsyncImage(
+                model = photo,
+                contentDescription = stringResource(R.string.switch_account),
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(AVATAR_SIZE).clip(CircleShape).thumbnailBorder(CircleShape),
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(AVATAR_SIZE)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .thumbnailBorder(CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Rounded.Person,
+                    contentDescription = stringResource(R.string.switch_account),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
             }
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text(if (managing) "Done" else "Manage accounts") },
-                onClick = { managing = !managing },
-                leadingIcon = { Icon(Icons.Rounded.ManageAccounts, null) },
-            )
-            DropdownMenuItem(
-                text = { Text("Add account") },
-                onClick = {
-                    expanded = false
-                    onAddAccount?.invoke() ?: onClick()
-                },
-                leadingIcon = { Icon(Icons.Rounded.PersonAdd, null) },
-            )
-            DropdownMenuItem(
-                text = { Text("Settings") },
-                onClick = {
-                    expanded = false
-                    onOpenSettings?.invoke() ?: onClick()
-                },
-                leadingIcon = { Icon(Icons.Rounded.Settings, null) },
-            )
         }
     }
 }
 '''
-
     text = text[:start] + new_function + text[end:]
+    # The old dropdown imports are harmless but removing them keeps this file clean.
     for imp in [
         'import androidx.compose.material3.DropdownMenu',
         'import androidx.compose.material3.DropdownMenuItem',
@@ -204,22 +128,81 @@ fun TopBarAccountButton(
         'import androidx.compose.material.icons.rounded.PersonAdd',
         'import androidx.compose.material.icons.rounded.Settings',
     ]:
-        text = add_import(text, imp)
+        text = text.replace(imp + '\n', '')
     path.write_text(text, encoding='utf-8')
 
     main = ROOT / 'app/src/main/java/com/music/bitchord/MainActivity.kt'
     text = main.read_text(encoding='utf-8')
-    old = '''onClick = {
-                                    if (signedIn) {
-                                        viewModel.loadChannels()
-                                        showAccountSelector = true
-                                    } else showSettings = true
-                                },'''
-    new = '''onClick = { showSettings = true },
+    text = add_import(text, 'import com.music.bitchord.ui.components.AccountProfileSelector')
+
+    # Collect the persistent Google account/profile list once at the app level.
+    anchor = '    val signedIn by viewModel.signedIn.collectAsStateWithLifecycle()\n'
+    collectors = '''    val signedIn by viewModel.signedIn.collectAsStateWithLifecycle()
+    val googleAccounts by viewModel.googleAccounts.collectAsStateWithLifecycle()
+    val activeAccountId by viewModel.activeAccountId.collectAsStateWithLifecycle()
+    val activeProfileId by viewModel.activeProfileId.collectAsStateWithLifecycle()
+'''
+    if anchor in text and collectors not in text:
+        text = text.replace(anchor, collectors, 1)
+
+    old_call = '''TopBarAccountButton(
+                                account = account,
+                                onClick = { showSettings = true },
                                 onAddAccount = { webSession = WebSessionMode.SIGN_IN },
-                                onOpenSettings = { showSettings = true },'''
-    if old in text:
-        main.write_text(text.replace(old, new, 1), encoding='utf-8')
+                                onOpenSettings = { showSettings = true },
+                                onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
+                            )'''
+    new_call = '''TopBarAccountButton(
+                                account = account,
+                                onClick = { showAccountSelector = true },
+                                onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
+                            )'''
+    if old_call in text:
+        text = text.replace(old_call, new_call, 1)
+
+    # Mount the already-designed full account selector as a real overlay. This
+    # keeps Add account / Manage accounts / Settings wired to the same state and
+    # avoids the cramped generic DropdownMenu that caused the reported bug.
+    marker = '        // ---- Update available (once per launch) ----\n'
+    overlay = '''        if (showAccountSelector) {
+            BackHandler { showAccountSelector = false }
+            AccountProfileSelector(
+                accounts = googleAccounts,
+                activeAccountId = activeAccountId,
+                activeProfileId = activeProfileId,
+                hazeState = hazeState,
+                onSelect = { selectedAccount, profile ->
+                    viewModel.selectProfile(selectedAccount.accountId, profile.profileId, profile)
+                    showAccountSelector = false
+                },
+                onAddAccount = {
+                    showAccountSelector = false
+                    webSession = WebSessionMode.SIGN_IN
+                },
+                onRemoveAccount = { selectedAccount ->
+                    viewModel.removeAccount(selectedAccount.accountId)
+                },
+                onOpenSettings = {
+                    showAccountSelector = false
+                    showSettings = true
+                },
+                onDismiss = { showAccountSelector = false },
+            )
+        }
+
+'''
+    if marker in text and 'AccountProfileSelector(' not in text:
+        text = text.replace(marker, overlay + marker, 1)
+    main.write_text(text, encoding='utf-8')
+
+
+def patch_account_screen() -> None:
+    path = ROOT / 'app/src/main/java/com/music/bitchord/ui/screens/AccountAndScrobblingScreen.kt'
+    text = path.read_text(encoding='utf-8')
+    duplicate = '''            SettingsGroup { DestructiveRow(label = stringResource(R.string.sign_out), onClick = onSignOut) }\n'''
+    if duplicate in text:
+        text = text.replace(duplicate, '', 1)
+    path.write_text(text, encoding='utf-8')
 
 
 def patch_replay_safety() -> None:
@@ -228,11 +211,71 @@ def patch_replay_safety() -> None:
     marker = '    private const val DIRECTORY = "listening"'
     comment = '    // Replay is device-local and must never be cleared by authentication changes.\n'
     if marker in text and comment not in text:
-        path.write_text(text.replace(marker, comment + marker, 1), encoding='utf-8')
+        text = text.replace(marker, comment + marker, 1)
+    path.write_text(text, encoding='utf-8')
+
+
+def patch_updater() -> None:
+    path = ROOT / 'app/src/main/java/com/music/bitchord/data/AppUpdateChecker.kt'
+    text = path.read_text(encoding='utf-8')
+    text = text.replace('import android.content.Intent\n', 'import android.content.Intent\nimport android.content.pm.PackageManager\n')
+    text = text.replace('suspend fun check() = withContext(Dispatchers.IO) {', 'suspend fun check(context: Context) = withContext(Dispatchers.IO) {')
+    text = text.replace('val apkUrl = apkAssetUrl(release)', 'val apkUrl = apkAssetUrl(release, installedVariant(context))')
+    text = text.replace('private fun apkAssetUrl(release: JsonObject): String? = runCatching {', 'private fun apkAssetUrl(release: JsonObject, variant: String): String? = runCatching {')
+    old_asset = '''            ?.firstOrNull { asset ->
+                asset["name"]?.jsonPrimitive?.contentOrNull?.endsWith(".apk", ignoreCase = true) == true &&
+                    asset["state"]?.jsonPrimitive?.contentOrNull == "uploaded"
+            }'''
+    new_asset = '''            ?.filter { asset ->
+                asset["name"]?.jsonPrimitive?.contentOrNull?.endsWith(".apk", ignoreCase = true) == true &&
+                    asset["state"]?.jsonPrimitive?.contentOrNull == "uploaded"
+            }
+            ?.sortedBy { asset ->
+                val name = asset["name"]?.jsonPrimitive?.contentOrNull.orEmpty().lowercase()
+                if (name.contains("-$variant.apk")) 0 else if (name.contains("-universal.apk")) 1 else 2
+            }
+            ?.firstOrNull()'''
+    text = text.replace(old_asset, new_asset)
+    text = text.replace('File(dir, "bitchord-${info.version}.apk")', 'File(dir, "pexpo-${info.version}.apk")')
+
+    helper = '''
+    /**
+     * Detects the APK family that is actually installed. A monolithic APK has
+     * no split names and is the universal build; an ABI APK has a config split.
+     * This is deliberately based on PackageInfo rather than the device ABI:
+     * an arm64 phone can have the universal APK installed, and must receive the
+     * universal APK again as requested by the user.
+     */
+    private fun installedVariant(context: Context): String {
+        val splits = runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).splitNames.orEmpty()
+        }.getOrDefault(emptyArray())
+        val joined = splits.joinToString(" ").lowercase()
+        return when {
+            joined.contains("arm64") || joined.contains("arm64_v8a") -> "arm64-v8a"
+            joined.contains("armeabi") || joined.contains("armeabi_v7a") -> "armeabi-v7a"
+            joined.contains("x86_64") -> "x86_64"
+            else -> "universal"
+        }
+    }
+'''
+    if 'private fun installedVariant(context: Context)' not in text:
+        text = text.replace('\n    /** Numeric, dot-separated comparison', helper + '\n    /** Numeric, dot-separated comparison', 1)
+    path.write_text(text, encoding='utf-8')
+
+
+def patch_viewmodel_update_call() -> None:
+    path = ROOT / 'app/src/main/java/com/music/bitchord/ui/MainViewModel.kt'
+    text = path.read_text(encoding='utf-8')
+    text = text.replace('AppUpdateChecker.check()','AppUpdateChecker.check(getApplication())')
+    path.write_text(text, encoding='utf-8')
 
 
 if __name__ == '__main__':
     patch_branding()
     patch_account_menu()
+    patch_account_screen()
     patch_replay_safety()
-    print('Pexpo maintenance patch applied.')
+    patch_updater()
+    patch_viewmodel_update_call()
+    print('Pexpo v1.5.3 maintenance patch applied.')
