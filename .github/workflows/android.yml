@@ -126,25 +126,7 @@ jobs:
         cp app/build/outputs/apk/prod/release/app-prod-armeabi-v7a-release.apk release-assets/pexpo-1.5.3-armeabi-v7a.apk
         cp app/build/outputs/apk/prod/release/app-prod-x86_64-release.apk release-assets/pexpo-1.5.3-x86_64.apk
         sha256sum release-assets/*.apk | tee release-assets/SHA256SUMS.txt
-    - name: Upload Pexpo APK artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: pexpo-v1.5.3-release
-        path: release-assets/*
-    - name: Publish Pexpo v1.5.3 GitHub Release
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        set -euo pipefail
-        if gh release view v1.5.3 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-          echo 'v1.5.3 already exists; leaving the immutable release untouched.'
-        else
-          gh release create v1.5.3 \
-            --repo "$GITHUB_REPOSITORY" \
-            --target main \
-            --title 'Pexpo Music v1.5.3' \
-            --latest \
-            --notes-file <(cat <<'EOF'
+        cat > release-assets/RELEASE_NOTES.md <<'EOF'
 ## Pexpo Music v1.5.3
 
 ### Fixed
@@ -159,7 +141,28 @@ jobs:
 - Release assets are published for universal, arm64-v8a, armeabi-v7a, and x86_64.
 - The in-app updater downloads the correct asset and shows the GitHub release changelog before installation.
 EOF
-) \
-            release-assets/*.apk \
+    - name: Upload Pexpo APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: pexpo-v1.5.3-release
+        path: release-assets/*
+    - name: Publish Pexpo v1.5.3 GitHub Release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        if gh release view v1.5.3 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          echo 'v1.5.3 already exists; leaving the release untouched.'
+        else
+          gh release create v1.5.3 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target main \
+            --title 'Pexpo Music v1.5.3' \
+            --latest \
+            --notes-file release-assets/RELEASE_NOTES.md \
+            release-assets/pexpo-1.5.3-universal.apk \
+            release-assets/pexpo-1.5.3-arm64-v8a.apk \
+            release-assets/pexpo-1.5.3-armeabi-v7a.apk \
+            release-assets/pexpo-1.5.3-x86_64.apk \
             release-assets/SHA256SUMS.txt
         fi
