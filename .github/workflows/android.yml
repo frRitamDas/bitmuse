@@ -123,15 +123,16 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
-        if gh release view v1.5.1.4 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-          echo 'v1.5.1.4 already published.'
-          exit 0
+        if ! gh release view v1.5.1.4 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          gh release create v1.5.1.4 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target main \
+            --title 'Pexpo Music v1.5.1.4' \
+            --notes 'Pexpo Music v1.5.1.4\n\n### Major bug and system fixes for the Pexpo 1.5.4 release line\n- Fixed the Add an addon validation message so visible branding uses Pexpo.\n- Added Activity IME resize handling for edge-to-edge layouts.\n- Added global Compose IME-aware app resizing so dialogs, popups, sheets and other floating UI get usable space when the keyboard opens.\n- Keyboard-driven layout changes follow the system IME animation for smooth transitions.\n- Preserved the Pexpo 1.5.4 baseline, including Samsung/One UI floating mini-player stability fixes.\n- Updated the release/update version comparison to understand Pexpo four-part maintenance versions such as 1.5.1.4.\n- Release signing continues to prefer configured GitHub Actions secrets and never commits a private signing key.'
         fi
-        gh release create v1.5.1.4 \
+        gh release upload v1.5.1.4 \
           --repo "$GITHUB_REPOSITORY" \
-          --target main \
-          --title 'Pexpo Music v1.5.1.4' \
-          --notes 'Pexpo Music v1.5.1.4\n\n### Major bug and system fixes for the Pexpo 1.5.4 release line\n- Fixed the Add an addon validation message so visible branding uses Pexpo.\n- Added Activity IME resize handling for edge-to-edge layouts.\n- Added global Compose IME-aware app resizing so dialogs, popups, sheets and other floating UI get usable space when the keyboard opens.\n- Keyboard-driven layout changes follow the system IME animation for smooth transitions.\n- Preserved the Pexpo 1.5.4 baseline, including Samsung/One UI floating mini-player stability fixes.\n- Updated the release/update version comparison to understand Pexpo four-part maintenance versions such as 1.5.1.4.\n- Release signing continues to prefer configured GitHub Actions secrets and never commits a private signing key.' \
+          --clobber \
           release-assets/pexpo-1.5.1.4-universal.apk \
           release-assets/pexpo-1.5.1.4-arm64-v8a.apk \
           release-assets/pexpo-1.5.1.4-armeabi-v7a.apk \
