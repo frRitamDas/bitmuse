@@ -108,8 +108,13 @@ edit('app/build.gradle.kts', build_gradle)
 edit('app/src/main/AndroidManifest.xml', manifest)
 edit('app/src/main/java/com/music/bitchord/MainActivity.kt', main_activity)
 edit('app/src/main/java/com/music/bitchord/data/AppUpdateChecker.kt', updater)
-edit('app/src/main/java/com/music/bitchord/data/sources/addon/SourceFormats.kt', lambda s: s.replace(
+edit('.github/workflows/android.yml', android_workflow)
+
+source_formats = Path('app/src/main/java/com/music/bitchord/data/sources/addon/SourceFormats.kt')
+source_text = source_formats.read_text()
+source_new = source_text.replace(
     'That is not a web address BitChord can open',
     'That is not a web address Pexpo can open',
-))
-edit('.github/workflows/android.yml', android_workflow)
+)
+if source_new != source_text:
+    source_formats.write_text(source_new)
