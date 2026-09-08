@@ -102,38 +102,38 @@ jobs:
         fi
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-    - name: Build Pexpo v1.5.4
+    - name: Build Pexpo v1.5.1.4
       run: ./gradlew assembleProdRelease --stacktrace
     - name: Prepare release assets
       run: |
         set -euo pipefail
         mkdir -p release-assets
-        cp app/build/outputs/apk/prod/release/app-prod-universal-release.apk release-assets/pexpo-1.5.4-universal.apk
-        cp app/build/outputs/apk/prod/release/app-prod-arm64-v8a-release.apk release-assets/pexpo-1.5.4-arm64-v8a.apk
-        cp app/build/outputs/apk/prod/release/app-prod-armeabi-v7a-release.apk release-assets/pexpo-1.5.4-armeabi-v7a.apk
-        cp app/build/outputs/apk/prod/release/app-prod-x86_64-release.apk release-assets/pexpo-1.5.4-x86_64.apk
+        cp app/build/outputs/apk/prod/release/app-prod-universal-release.apk release-assets/pexpo-1.5.1.4-universal.apk
+        cp app/build/outputs/apk/prod/release/app-prod-arm64-v8a-release.apk release-assets/pexpo-1.5.1.4-arm64-v8a.apk
+        cp app/build/outputs/apk/prod/release/app-prod-armeabi-v7a-release.apk release-assets/pexpo-1.5.1.4-armeabi-v7a.apk
+        cp app/build/outputs/apk/prod/release/app-prod-x86_64-release.apk release-assets/pexpo-1.5.1.4-x86_64.apk
         sha256sum release-assets/*.apk > release-assets/SHA256SUMS.txt
-    - name: Upload Pexpo v1.5.4 artifact
+    - name: Upload Pexpo 1.5.1.4 artifact
       uses: actions/upload-artifact@v4
       with:
-        name: pexpo-v1.5.4-release
+        name: pexpo-v1.5.1.4-release
         path: release-assets/*
-    - name: Publish GitHub Release v1.5.4
+    - name: Publish GitHub Release v1.5.1.4
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
-        if gh release view v1.5.4 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-          echo 'v1.5.4 already published.'
+        if gh release view v1.5.1.4 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          echo 'v1.5.1.4 already published.'
           exit 0
         fi
-        gh release create v1.5.4 \
+        gh release create v1.5.1.4 \
           --repo "$GITHUB_REPOSITORY" \
           --target main \
-          --title 'Pexpo Music v1.5.4' \
-          --notes 'Pexpo Music v1.5.4\n\n### Improved system stability and bug fixes\n- Fixed Samsung/One UI mini-player disappearing during transient MediaController reconnects.\n- Stabilized the floating playback/navigation bar and preserved the visible track during short controller hand-offs.\n- Removed remaining user-visible BitChord branding from Discord Rich Presence and Replay sharing.\n- Discord Visit button now opens https://pexpomusic.xo.je.\n- Replay Save/share output now uses Pexpo naming instead of BitChord.\n- Improved release/update packaging and variant-aware APK selection.\n- Release signing continues to prefer configured GitHub Actions secrets and never commits a private signing key.' \
-          release-assets/pexpo-1.5.4-universal.apk \
-          release-assets/pexpo-1.5.4-arm64-v8a.apk \
-          release-assets/pexpo-1.5.4-armeabi-v7a.apk \
-          release-assets/pexpo-1.5.4-x86_64.apk \
+          --title 'Pexpo Music v1.5.1.4' \
+          --notes 'Pexpo Music v1.5.1.4\n\n### Major bug and system fixes for the Pexpo 1.5.4 release line\n- Fixed the Add an addon validation message so visible branding uses Pexpo.\n- Added Activity IME resize handling for edge-to-edge layouts.\n- Added global Compose IME-aware app resizing so dialogs, popups, sheets and other floating UI get usable space when the keyboard opens.\n- Keyboard-driven layout changes follow the system IME animation for smooth transitions.\n- Preserved the Pexpo 1.5.4 baseline, including Samsung/One UI floating mini-player stability fixes.\n- Updated the release/update version comparison to understand Pexpo four-part maintenance versions such as 1.5.1.4.\n- Release signing continues to prefer configured GitHub Actions secrets and never commits a private signing key.' \
+          release-assets/pexpo-1.5.1.4-universal.apk \
+          release-assets/pexpo-1.5.1.4-arm64-v8a.apk \
+          release-assets/pexpo-1.5.1.4-armeabi-v7a.apk \
+          release-assets/pexpo-1.5.1.4-x86_64.apk \
           release-assets/SHA256SUMS.txt
