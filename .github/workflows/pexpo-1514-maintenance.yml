@@ -1,0 +1,142 @@
+name: Pexpo 1.5.1.4 Maintenance
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Apply precise 1.5.1.4 fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def edit(path, fn):
+              p = Path(path)
+              text = p.read_text()
+              new = fn(text)
+              if new == text:
+                  raise SystemExit(f'No change made to {path}; refusing to create a no-op patch.')
+              p.write_text(new)
+
+          # Android release identity: 1.5.1.4 is the major maintenance patch
+          # attached to the 1.5.4 release line.
+          edit('app/build.gradle.kts', lambda s: s.replace('versionCode = 16', 'versionCode = 17', 1).replace('versionName = "1.5.4"', 'versionName = "1.5.1.4"', 1))
+
+          # Edge-to-edge + IME: allow the Activity to receive keyboard insets.
+          def manifest(s):
+              old = 'android:launchMode="singleTask"\n            android:screenOrientation="portrait"'
+              new = 'android:launchMode="singleTask"\n            android:screenOrientation="portrait"\n            android:windowSoftInputMode="adjustResize"'
+              if old not in s:
+                  raise SystemExit('MainActivity manifest anchor not found')
+              return s.replace(old, new, 1)
+          edit('app/src/main/AndroidManifest.xml', manifest)
+
+          # Global Compose IME handling. The outer app container is resized by
+          # imePadding, so every screen, popup and activity-hosted overlay gets
+          # the newly available space rather than each dialog needing a custom
+          # keyboard offset. Compose animates WindowInsets.ime with the IME.
+          def main_activity(s):
+              if 'import androidx.compose.foundation.layout.imePadding' not in s:
+                  anchor = 'import androidx.compose.foundation.layout.height\n'
+                  if anchor not in s:
+                      raise SystemExit('MainActivity import anchor not found')
+                  s = s.replace(anchor, anchor + 'import androidx.compose.foundation.layout.imePadding\n', 1)
+              old = 'BoxWithConstraints(Modifier.fillMaxSize()) {\n                    BitChordApp('
+              new = 'BoxWithConstraints(Modifier.fillMaxSize().imePadding()) {\n                    BitChordApp('
+              if old not in s:
+                  raise SystemExit('MainActivity root BoxWithConstraints anchor not found')
+              return s.replace(old, new, 1)
+          edit('app/src/main/java/com/music/bitchord/MainActivity.kt', main_activity)
+
+          # Update checker: Pexpo's four-part major-maintenance notation
+          # 1.5.1.4 means "maintenance patch for 1.5.4". Treat it as a point
+          # between 1.5.4 and 1.5.5 so the updater can offer it correctly.
+          def updater(s):
+              s = s.replace('import android.content.pm.PackageManager\nimport android.content.pm.PackageManager\nimport android.content.pm.PackageManager', 'import android.content.pm.PackageManager', 1)
+              old = '''    private fun isNewer(latest: String, current: String): Boolean {
+        val l = latest.split(".").map { it.toIntOrNull() ?: 0 }
+        val c = current.split(".").map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(l.size, c.size)) {
+            val a = l.getOrElse(i) { 0 }; val b = c.getOrElse(i) { 0 }
+            if (a != b) return a > b
+        }
+        return false
+    }'''
+              new = '''    private fun isNewer(latest: String, current: String): Boolean {
+        fun key(version: String): List<Int> {
+            val parts = version.split(".").map { it.toIntOrNull() ?: 0 }
+            // Pexpo maintenance notation: 1.5.1.4 means a major patch on
+            // release line 1.5.4. Its ordering is therefore:
+            // 1.5.4 < 1.5.1.4 < 1.5.5.
+            if (parts.size == 4 && parts[2] == 1) {
+                return listOf(parts[0], parts[1], parts[3], 1)
+            }
+            return listOf(
+                parts.getOrElse(0) { 0 },
+                parts.getOrElse(1) { 0 },
+                parts.getOrElse(2) { 0 },
+                0,
+            )
+        }
+
+        val l = key(latest)
+        val c = key(current)
+        for (i in l.indices) {
+            if (l[i] != c[i]) return l[i] > c[i]
+        }
+        return false
+    }'''
+              if old not in s:
+                  raise SystemExit('AppUpdateChecker version comparator anchor not found')
+              return s.replace(old, new, 1)
+          edit('app/src/main/java/com/music/bitchord/data/AppUpdateChecker.kt', updater)
+
+          # Release automation follows the new actual Android version.
+          def workflow(s):
+              replacements = [
+                  ('Build Pexpo v1.5.4', 'Build Pexpo v1.5.1.4'),
+                  ('pexpo-1.5.4-universal.apk', 'pexpo-1.5.1.4-universal.apk'),
+                  ('pexpo-1.5.4-arm64-v8a.apk', 'pexpo-1.5.1.4-arm64-v8a.apk'),
+                  ('pexpo-1.5.4-armeabi-v7a.apk', 'pexpo-1.5.1.4-armeabi-v7a.apk'),
+                  ('pexpo-1.5.4-x86_64.apk', 'pexpo-1.5.1.4-x86_64.apk'),
+                  ('pexpo-v1.5.4-release', 'pexpo-v1.5.1.4-release'),
+                  ('Publish GitHub Release v1.5.4', 'Publish GitHub Release v1.5.1.4'),
+                  ('gh release view v1.5.4', 'gh release view v1.5.1.4'),
+                  ('gh release create v1.5.4', 'gh release create v1.5.1.4'),
+                  ("--title 'Pexpo Music v1.5.4'", "--title 'Pexpo Music v1.5.1.4'"),
+              ]
+              for a, b in replacements:
+                  if a not in s:
+                      raise SystemExit(f'Android workflow anchor not found: {a}')
+                  s = s.replace(a, b, 1)
+              s = s.replace("Pexpo Music v1.5.4\\n\\n### Improved system stability and bug fixes", "Pexpo Music v1.5.1.4\\n\\n### Major bug and system fixes for the Pexpo 1.5.4 release line", 1)
+              return s
+          edit('.github/workflows/android.yml', workflow)
+
+          # Keep the patch's user-facing addon validation branding consistent.
+          def source_formats(s):
+              return s.replace('That is not a web address BitChord can open', 'That is not a web address Pexpo can open')
+          edit('app/src/main/java/com/music/bitchord/data/sources/addon/SourceFormats.kt', source_formats)
+          PY
+
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/build.gradle.kts app/src/main/AndroidManifest.xml app/src/main/java/com/music/bitchord/MainActivity.kt app/src/main/java/com/music/bitchord/data/AppUpdateChecker.kt app/src/main/java/com/music/bitchord/data/sources/addon/SourceFormats.kt .github/workflows/android.yml
+          git diff --cached --check
+          git commit -m 'fix: Pexpo 1.5.1.4 keyboard and system fixes [skip ci]'
+          git push origin HEAD:main
