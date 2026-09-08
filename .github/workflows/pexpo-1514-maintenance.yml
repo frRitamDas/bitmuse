@@ -9,7 +9,6 @@ permissions:
 
 jobs:
   patch:
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,36 +17,35 @@ jobs:
           fetch-depth: 0
 
       - name: Apply precise 1.5.1.4 fixes
+        shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           def edit(path, fn):
               p = Path(path)
               text = p.read_text()
               new = fn(text)
               if new == text:
-                  raise SystemExit(f'No change made to {path}; refusing to create a no-op patch.')
+                  raise SystemExit(f'No change made to {path}')
               p.write_text(new)
 
-          # Android release identity: 1.5.1.4 is the major maintenance patch
-          # attached to the 1.5.4 release line.
-          edit('app/build.gradle.kts', lambda s: s.replace('versionCode = 16', 'versionCode = 17', 1).replace('versionName = "1.5.4"', 'versionName = "1.5.1.4"', 1))
+          def build_gradle(s):
+              s = s.replace('versionCode = 16', 'versionCode = 17', 1)
+              s = s.replace('versionName = "1.5.4"', 'versionName = "1.5.1.4"', 1)
+              return s
+          edit('app/build.gradle.kts', build_gradle)
 
-          # Edge-to-edge + IME: allow the Activity to receive keyboard insets.
           def manifest(s):
-              old = 'android:launchMode="singleTask"\n            android:screenOrientation="portrait"'
-              new = 'android:launchMode="singleTask"\n            android:screenOrientation="portrait"\n            android:windowSoftInputMode="adjustResize"'
-              if old not in s:
-                  raise SystemExit('MainActivity manifest anchor not found')
-              return s.replace(old, new, 1)
+              anchor = 'android:launchMode="singleTask"\n            android:screenOrientation="portrait"'
+              replacement = anchor + '\n            android:windowSoftInputMode="adjustResize"'
+              if 'android:windowSoftInputMode="adjustResize"' in s:
+                  return s
+              if anchor not in s:
+                  raise SystemExit('manifest anchor not found')
+              return s.replace(anchor, replacement, 1)
           edit('app/src/main/AndroidManifest.xml', manifest)
 
-          # Global Compose IME handling. The outer app container is resized by
-          # imePadding, so every screen, popup and activity-hosted overlay gets
-          # the newly available space rather than each dialog needing a custom
-          # keyboard offset. Compose animates WindowInsets.ime with the IME.
           def main_activity(s):
               if 'import androidx.compose.foundation.layout.imePadding' not in s:
                   anchor = 'import androidx.compose.foundation.layout.height\n'
@@ -57,15 +55,15 @@ jobs:
               old = 'BoxWithConstraints(Modifier.fillMaxSize()) {\n                    BitChordApp('
               new = 'BoxWithConstraints(Modifier.fillMaxSize().imePadding()) {\n                    BitChordApp('
               if old not in s:
-                  raise SystemExit('MainActivity root BoxWithConstraints anchor not found')
+                  if 'BoxWithConstraints(Modifier.fillMaxSize().imePadding()) {' in s:
+                      return s
+                  raise SystemExit('MainActivity root anchor not found')
               return s.replace(old, new, 1)
           edit('app/src/main/java/com/music/bitchord/MainActivity.kt', main_activity)
 
-          # Update checker: Pexpo's four-part major-maintenance notation
-          # 1.5.1.4 means "maintenance patch for 1.5.4". Treat it as a point
-          # between 1.5.4 and 1.5.5 so the updater can offer it correctly.
           def updater(s):
-              s = s.replace('import android.content.pm.PackageManager\nimport android.content.pm.PackageManager\nimport android.content.pm.PackageManager', 'import android.content.pm.PackageManager', 1)
+              while 'import android.content.pm.PackageManager\nimport android.content.pm.PackageManager' in s:
+                  s = s.replace('import android.content.pm.PackageManager\nimport android.content.pm.PackageManager', 'import android.content.pm.PackageManager', 1)
               old = '''    private fun isNewer(latest: String, current: String): Boolean {
         val l = latest.split(".").map { it.toIntOrNull() ?: 0 }
         val c = current.split(".").map { it.toIntOrNull() ?: 0 }
@@ -78,9 +76,8 @@ jobs:
               new = '''    private fun isNewer(latest: String, current: String): Boolean {
         fun key(version: String): List<Int> {
             val parts = version.split(".").map { it.toIntOrNull() ?: 0 }
-            // Pexpo maintenance notation: 1.5.1.4 means a major patch on
-            // release line 1.5.4. Its ordering is therefore:
-            // 1.5.4 < 1.5.1.4 < 1.5.5.
+            // 1.5.1.4 is the major maintenance patch attached to 1.5.4.
+            // Order it between 1.5.4 and 1.5.5.
             if (parts.size == 4 && parts[2] == 1) {
                 return listOf(parts[0], parts[1], parts[3], 1)
             }
@@ -100,11 +97,10 @@ jobs:
         return false
     }'''
               if old not in s:
-                  raise SystemExit('AppUpdateChecker version comparator anchor not found')
+                  raise SystemExit('AppUpdateChecker comparator anchor not found')
               return s.replace(old, new, 1)
           edit('app/src/main/java/com/music/bitchord/data/AppUpdateChecker.kt', updater)
 
-          # Release automation follows the new actual Android version.
           def workflow(s):
               replacements = [
                   ('Build Pexpo v1.5.4', 'Build Pexpo v1.5.1.4'),
@@ -120,16 +116,18 @@ jobs:
               ]
               for a, b in replacements:
                   if a not in s:
-                      raise SystemExit(f'Android workflow anchor not found: {a}')
+                      raise SystemExit(f'android workflow anchor not found: {a}')
                   s = s.replace(a, b, 1)
               s = s.replace("Pexpo Music v1.5.4\\n\\n### Improved system stability and bug fixes", "Pexpo Music v1.5.1.4\\n\\n### Major bug and system fixes for the Pexpo 1.5.4 release line", 1)
               return s
           edit('.github/workflows/android.yml', workflow)
 
-          # Keep the patch's user-facing addon validation branding consistent.
+          # SourceFormats was already updated directly; keep the check here so
+          # the one-time workflow remains idempotent if it is retried.
           def source_formats(s):
               return s.replace('That is not a web address BitChord can open', 'That is not a web address Pexpo can open')
-          edit('app/src/main/java/com/music/bitchord/data/sources/addon/SourceFormats.kt', source_formats)
+          sf = Path('app/src/main/java/com/music/bitchord/data/sources/addon/SourceFormats.kt')
+          sf.write_text(source_formats(sf.read_text()))
           PY
 
       - name: Commit patch
@@ -138,5 +136,6 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add app/build.gradle.kts app/src/main/AndroidManifest.xml app/src/main/java/com/music/bitchord/MainActivity.kt app/src/main/java/com/music/bitchord/data/AppUpdateChecker.kt app/src/main/java/com/music/bitchord/data/sources/addon/SourceFormats.kt .github/workflows/android.yml
           git diff --cached --check
+          git diff --cached --quiet && { echo 'Nothing to commit'; exit 0; }
           git commit -m 'fix: Pexpo 1.5.1.4 keyboard and system fixes [skip ci]'
           git push origin HEAD:main
