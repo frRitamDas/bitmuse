@@ -79,36 +79,10 @@ def updater(s):
     return s.replace(old, new, 1)
 
 
-def android_workflow(s):
-    replacements = [
-        ('Build Pexpo v1.5.4', 'Build Pexpo v1.5.1.4'),
-        ('pexpo-1.5.4-universal.apk', 'pexpo-1.5.1.4-universal.apk'),
-        ('pexpo-1.5.4-arm64-v8a.apk', 'pexpo-1.5.1.4-arm64-v8a.apk'),
-        ('pexpo-1.5.4-armeabi-v7a.apk', 'pexpo-1.5.1.4-armeabi-v7a.apk'),
-        ('pexpo-1.5.4-x86_64.apk', 'pexpo-1.5.1.4-x86_64.apk'),
-        ('pexpo-v1.5.4-release', 'pexpo-v1.5.1.4-release'),
-        ('Publish GitHub Release v1.5.4', 'Publish GitHub Release v1.5.1.4'),
-        ('gh release view v1.5.4', 'gh release view v1.5.1.4'),
-        ('gh release create v1.5.4', 'gh release create v1.5.1.4'),
-        ("--title 'Pexpo Music v1.5.4'", "--title 'Pexpo Music v1.5.1.4'"),
-    ]
-    for old, new in replacements:
-        if old not in s:
-            raise SystemExit(f"Android workflow anchor not found: {old}")
-        s = s.replace(old, new, 1)
-    s = s.replace(
-        "Pexpo Music v1.5.4\\n\\n### Improved system stability and bug fixes",
-        "Pexpo Music v1.5.1.4\\n\\n### Major bug and system fixes for the Pexpo 1.5.4 release line",
-        1,
-    )
-    return s
-
-
 edit('app/build.gradle.kts', build_gradle)
 edit('app/src/main/AndroidManifest.xml', manifest)
 edit('app/src/main/java/com/music/bitchord/MainActivity.kt', main_activity)
 edit('app/src/main/java/com/music/bitchord/data/AppUpdateChecker.kt', updater)
-edit('.github/workflows/android.yml', android_workflow)
 
 source_formats = Path('app/src/main/java/com/music/bitchord/data/sources/addon/SourceFormats.kt')
 source_text = source_formats.read_text()
