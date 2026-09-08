@@ -3,8 +3,6 @@ package com.music.bitchord.data
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.pm.PackageManager
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -130,11 +128,25 @@ object AppUpdateChecker {
     }
 
     private fun isNewer(latest: String, current: String): Boolean {
-        val l = latest.split(".").map { it.toIntOrNull() ?: 0 }
-        val c = current.split(".").map { it.toIntOrNull() ?: 0 }
-        for (i in 0 until maxOf(l.size, c.size)) {
-            val a = l.getOrElse(i) { 0 }; val b = c.getOrElse(i) { 0 }
-            if (a != b) return a > b
+        fun key(version: String): List<Int> {
+            val parts = version.split(".").map { it.toIntOrNull() ?: 0 }
+            // 1.5.1.4 is the major maintenance patch attached to 1.5.4.
+            // Order it between 1.5.4 and 1.5.5.
+            if (parts.size == 4 && parts[2] == 1) {
+                return listOf(parts[0], parts[1], parts[3], 1)
+            }
+            return listOf(
+                parts.getOrElse(0) { 0 },
+                parts.getOrElse(1) { 0 },
+                parts.getOrElse(2) { 0 },
+                0,
+            )
+        }
+
+        val l = key(latest)
+        val c = key(current)
+        for (i in l.indices) {
+            if (l[i] != c[i]) return l[i] > c[i]
         }
         return false
     }
