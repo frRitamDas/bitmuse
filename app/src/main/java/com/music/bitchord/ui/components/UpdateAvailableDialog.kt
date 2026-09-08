@@ -250,12 +250,12 @@ fun UpdateAvailableDialog(
                     AlertAction(label = stringResource(R.string.later), emphasised = false, onClick = onDismiss)
                 }
                 is AppUpdateChecker.DownloadState.Failed -> {
-                    AlertAction(label = stringResource(R.string.try_again), emphasised = true, onClick = onDownload)
+                    AlertAction(label = stringResource(R.string.update_now), emphasised = true, onClick = onDownload)
                     AlertRule()
                     AlertAction(label = stringResource(R.string.open_releases_page), emphasised = false, onClick = onOpenReleasePage)
                 }
                 else -> {
-                    AlertAction(label = stringResource(R.string.download_now), emphasised = true, onClick = onDownload)
+                    AlertAction(label = stringResource(R.string.update_now), emphasised = true, onClick = onDownload)
                     AlertRule()
                     AlertAction(label = stringResource(R.string.remind_me_later), emphasised = false, onClick = onDismiss)
                 }

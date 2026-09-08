@@ -107,6 +107,7 @@
     <string name="update_ready_body">Pexpo %1$s is ready to install.</string>
     <string name="update_failed_body">Couldn’t download Pexpo %1$s.</string>
     <string name="download_now">Download Now</string>
+    <string name="update_now">Update now</string>
     <string name="install_now">Install Now</string>
     <string name="later">Later</string>
     <string name="remind_me_later">Remind Me Later</string>
@@ -693,6 +694,7 @@
     <string name="personal">Personal</string>
     <string name="brand_account">Brand account</string>
     <string name="add_account">Add account</string>
+    <string name="single_account_limit">Not more than one account</string>
     <string name="manage_accounts">Manage accounts</string>
     <string name="current_account">Current account</string>
     <string name="current_profile">Current profile</string>

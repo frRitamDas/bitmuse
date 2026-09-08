@@ -1,5 +1,6 @@
 package com.music.bitchord
 import com.music.bitchord.ui.components.AccountProfileSelector
+import com.music.bitchord.ui.components.AdaptiveDisplayCompatibility
 
 import android.Manifest
 import android.content.Intent
@@ -277,8 +278,10 @@ class MainActivity : AppCompatActivity() {
                 // longer exists and a page squeezed to a sliver to pay for it.
                 // A measured constraint cannot be stale — it is the very width
                 // the split is about to be laid out in.
-                BoxWithConstraints(Modifier.fillMaxSize().imePadding()) {
-                    BitChordApp(darkTheme = darkTheme, windowWidth = maxWidth, appBackdrop = appBackdrop)
+                AdaptiveDisplayCompatibility {
+                    BoxWithConstraints(Modifier.fillMaxSize().imePadding()) {
+                        BitChordApp(darkTheme = darkTheme, windowWidth = maxWidth, appBackdrop = appBackdrop)
+                    }
                 }
                 }
             }

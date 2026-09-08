@@ -26,6 +26,7 @@ object AppUpdateChecker {
 
     private const val CACHE_SUBDIR = "updates"
     private const val LATEST_RELEASE_URL = "https://api.github.com/repos/frRitamDas/bitmuse/releases/latest"
+    private const val UPDATE_WEBSITE_URL = "https://pexpoupdates.xo.je"
     private val json = Json { ignoreUnknownKeys = true }
 
     private val _available = MutableStateFlow<UpdateInfo?>(null)
@@ -71,35 +72,11 @@ object AppUpdateChecker {
         }?.firstOrNull()?.get("browser_download_url")?.jsonPrimitive?.contentOrNull
     }.getOrNull()
 
-    suspend fun downloadApk(context: Context): Unit = withContext(Dispatchers.IO) {
-        val info = _available.value ?: return@withContext
-        val url = info.apkUrl ?: return@withContext
-        downloadCancelled = false
-        _download.value = DownloadState.Downloading(0f)
+    suspend fun downloadApk(context: Context): Unit = withContext(Dispatchers.Main) {
+        _download.value = DownloadState.Idle
         runCatching {
-            val dir = File(context.cacheDir, CACHE_SUBDIR).apply { mkdirs() }
-            dir.listFiles()?.forEach { it.delete() }
-            val target = File(dir, "pexpo-${info.version}.apk")
-            val request = Request.Builder().url(url).build()
-            Http.client.newCall(request).execute().use { response ->
-                check(response.isSuccessful) { "Download failed: HTTP ${response.code}" }
-                val body = response.body ?: error("Empty download body")
-                val total = body.contentLength().takeIf { it > 0 }
-                body.byteStream().use { input -> target.outputStream().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    var readTotal = 0L
-                    while (true) {
-                        if (downloadCancelled) { _download.value = DownloadState.Idle; return@withContext }
-                        val read = input.read(buffer)
-                        if (read == -1) break
-                        output.write(buffer, 0, read)
-                        readTotal += read
-                        total?.let { _download.value = DownloadState.Downloading((readTotal.toFloat() / it).coerceIn(0f, 1f)) }
-                    }
-                }}
-            }
-            _download.value = DownloadState.Ready(target)
-        }.onFailure { error -> _download.value = if (downloadCancelled) DownloadState.Idle else DownloadState.Failed(error.message ?: "Download failed") }
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UPDATE_WEBSITE_URL)).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+        }.onFailure { error -> _download.value = DownloadState.Failed(error.message ?: "Could not open Pexpo Updates") }
     }
 
     fun cancelDownload() { downloadCancelled = true }
