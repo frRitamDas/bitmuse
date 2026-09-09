@@ -31,7 +31,7 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Build Dev Debug APK
-      run: ./gradlew assembleDevDebug
+      run: ./gradlew assembleDevDebug --stacktrace
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
@@ -44,8 +44,6 @@ jobs:
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v5
-    - name: Apply one-time Pexpo 1.5.1.4 patch
-      run: python scripts/patch_1514.py
     - name: Set up JDK 17
       uses: actions/setup-java@v5
       with:
