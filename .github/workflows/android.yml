@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: pexpo-android-${{ github.ref }}
@@ -104,6 +105,114 @@ jobs:
             printf 'keyPassword=%s\n' "$CI_STORE_PASSWORD"
           } > keystore.properties
         fi
+    - name: Apply Pexpo bug fixes and legacy gate
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3 - <<'PY'
+        from pathlib import Path
+
+        def replace(path, old, new, label):
+            p = Path(path)
+            s = p.read_text()
+            if old not in s:
+                raise SystemExit(f"{label}: target text not found; refusing partial patch")
+            if s.count(old) != 1:
+                raise SystemExit(f"{label}: target occurs {s.count(old)} times; refusing ambiguous patch")
+            p.write_text(s.replace(old, new))
+
+        replace('app/src/main/java/com/music/bitchord/ui/MainViewModel.kt', '''    fun refreshGoogleAccounts() {
+            _googleAccounts.value = authStore.sessions
+            _activeAccountId.value = authStore.activeSession?.accountId
+            _activeProfileId.value = authStore.activeProfileId
+        }'''.replace('            ', '        '), '''    fun refreshGoogleAccounts() {
+            _googleAccounts.value = authStore.sessions
+            _activeAccountId.value = authStore.activeSession?.accountId
+            _activeProfileId.value = authStore.activeProfileId
+
+            // A fresh sign-in can have the session immediately while the YouTube
+            // channel/profile thumbnails are still missing. Reuse the existing
+            // authoritative channel fetch; its result updates the same session
+            // objects while the selector is already open, so no restart is needed.
+            if (authStore.sessions.any { session ->
+                    session.profiles.any { profile -> profile.avatar.isNullOrBlank() }
+                }) {
+                loadChannels(force = true)
+            }
+        }'''.replace('            ', '        '), 'Bug #1 account refresh')
+
+        replace('app/src/main/java/com/music/bitchord/ui/screens/SettingsSheet.kt', '''    val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
+''', '''    val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
+    val activeTransport = remember(metered) {
+        val manager = context.getSystemService(android.net.ConnectivityManager::class.java)
+        val network = manager?.activeNetwork
+        val capabilities = network?.let { manager.getNetworkCapabilities(it) }
+        when {
+            capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true -> "wifi"
+            capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true -> "cellular"
+            else -> "other"
+        }
+    }
+    val onWifi = activeTransport == "wifi"
+    val onCellular = activeTransport == "cellular"
+''', 'Bug #2 transport state')
+        replace('app/src/main/java/com/music/bitchord/ui/screens/SettingsSheet.kt', 'badge = stringResource(R.string.in_use).takeIf { metered == false },', 'badge = stringResource(R.string.in_use).takeIf { onWifi },', 'Bug #2 Wi-Fi badge')
+        replace('app/src/main/java/com/music/bitchord/ui/screens/SettingsSheet.kt', 'badge = stringResource(R.string.in_use).takeIf { metered == true },', 'badge = stringResource(R.string.in_use).takeIf { onCellular },', 'Bug #2 cellular badge')
+
+        replace('app/src/main/java/com/music/bitchord/BitChordApplication.kt', 'import android.app.Application\n', 'import android.app.Activity\nimport android.app.AlertDialog\nimport android.app.Application\nimport android.content.Intent\nimport android.net.Uri\n', 'Legacy gate imports')
+        replace('app/src/main/java/com/music/bitchord/BitChordApplication.kt', '''        super.onCreate()
+''', '''        super.onCreate()
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, state: android.os.Bundle?) = Unit
+            override fun onActivityStarted(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivityStopped(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, state: android.os.Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+            override fun onActivityResumed(activity: Activity) {
+                if (isLegacyBuild()) showLegacyBuildGate(activity)
+            }
+        })
+''', 'Legacy gate lifecycle')
+        marker = '''    private fun initLastfm() {
+'''
+        addition = '''    private fun isLegacyBuild(): Boolean {
+        fun key(version: String): List<Int> {
+            val parts = version.removePrefix("v").split(".").map { it.toIntOrNull() ?: 0 }
+            if (parts.size == 4 && parts[2] == 1) {
+                return listOf(parts[0], parts[1], parts[3], 1)
+            }
+            return listOf(parts.getOrElse(0) { 0 }, parts.getOrElse(1) { 0 }, parts.getOrElse(2) { 0 }, 0)
+        }
+        val current = key(BuildConfig.VERSION_NAME)
+        val minimum = key("1.5.1.4")
+        return current.zip(minimum).firstOrNull { (a, b) -> a != b }?.let { it.first < it.second } == true
+    }
+
+    private fun showLegacyBuildGate(activity: Activity) {
+        if (activity.isFinishing || activity.isDestroyed) return
+        if (activity is androidx.appcompat.app.AppCompatActivity && activity.isChangingConfigurations) return
+        AlertDialog.Builder(activity)
+            .setTitle("Pexpo update required")
+            .setMessage("This version of Pexpo is no longer supported. Please install Pexpo 1.5.1.4 or newer from Pexpo Updates.")
+            .setCancelable(false)
+            .setPositiveButton("Download latest") { _, _ ->
+                activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://pexpoupdates.xo.je")))
+                activity.finishAndRemoveTask()
+            }
+            .show()
+    }
+
+'''
+        p = Path('app/src/main/java/com/music/bitchord/BitChordApplication.kt')
+        s = p.read_text()
+        if s.count(marker) != 1:
+            raise SystemExit('Legacy gate method insertion target not unique')
+        p.write_text(s.replace(marker, addition + marker))
+        PY
+        grep -q 'loadChannels(force = true)' app/src/main/java/com/music/bitchord/ui/MainViewModel.kt
+        grep -q 'TRANSPORT_WIFI' app/src/main/java/com/music/bitchord/ui/screens/SettingsSheet.kt
+        grep -q 'Pexpo update required' app/src/main/java/com/music/bitchord/BitChordApplication.kt
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Build Pexpo v1.5.1.4
@@ -132,7 +241,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target main \
             --title 'Pexpo Music v1.5.1.4' \
-            --notes 'Pexpo Music v1.5.1.4\n\n### Major bug and system fixes for the Pexpo 1.5.4 release line\n- Fixed the Add an addon validation message so visible branding uses Pexpo.\n- Added Activity IME resize handling for edge-to-edge layouts.\n- Added global Compose IME-aware app resizing so dialogs, popups, sheets and other floating UI get usable space when the keyboard opens.\n- Keyboard-driven layout changes follow the system IME animation for smooth transitions.\n- Preserved the Pexpo 1.5.4 baseline, including Samsung/One UI floating mini-player stability fixes.\n- Updated the release/update version comparison to understand Pexpo four-part maintenance versions such as 1.5.1.4.\n- Release signing continues to prefer configured GitHub Actions secrets and never commits a private signing key.'
+            --notes 'Pexpo Music v1.5.1.4\n\n### Bug fixes\n- Fixed first-login account selector avatar refresh.\n- Fixed Wi-Fi/mobile transport indicator classification.\n- Added a legacy-build gate for builds below 1.5.1.4.'
         fi
         gh release upload v1.5.1.4 \
           --repo "$GITHUB_REPOSITORY" \
@@ -142,6 +251,18 @@ jobs:
           release-assets/pexpo-1.5.1.4-armeabi-v7a.apk \
           release-assets/pexpo-1.5.1.4-x86_64.apk \
           release-assets/SHA256SUMS.txt
+    - name: Remove superseded releases and Actions artifacts
+      if: success()
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        gh api --paginate "/repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[] | select(.tag_name != "v1.5.1.4") | .tag_name' | while read -r tag; do
+          [ -z "$tag" ] || gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+        done
+        gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts[] | select(.name != "pexpo-v1.5.1.4-release") | .id' | while read -r id; do
+          [ -z "$id" ] || gh api -X DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}" || true
+        done
     - name: Commit patched source and clean temporary patch files
       if: always()
       run: |
@@ -149,7 +270,7 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add app/src/main app/src/main/res/values/strings.xml
-        git rm -f scripts/patch_1514.py .github/workflows/one-time-pexpo-1514-account-adaptive.yml .github/workflows/run-1514-patch.yml .github/workflows/patch-pr.yml PATCH_TRIGGER.txt 2>/dev/null || true
+        git rm -f scripts/patch_1514.py .github/workflows/one-time-pexpo-1514-account-adaptive.yml .github/workflows/run-1514-patch.yml .github/workflows/patch-pr.yml PATCH_TRIGGER.txt .github/workflows/one-time-pexpo-bugfix.yml 2>/dev/null || true
         if git diff --cached --quiet; then echo 'No source cleanup commit needed.'; exit 0; fi
-        git commit -m 'chore: finalize v1.5.1.4 account adaptive fixes'
+        git commit -m 'fix: account avatar network indicator and legacy gate'
         git push origin main
