@@ -28,8 +28,8 @@ android {
         applicationId = "com.pexpo.music"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.5.1.4"
+        versionCode = 19
+        versionName = "1.5.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "LASTFM_API_KEY", "\"${lastfmApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "LASTFM_SECRET", "\"${lastfmSecret.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
@@ -153,7 +153,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("io.ktor:ktor-client-websockets:3.0.3")
     implementation(files(newPipeExtractorStripped))
-    implementation("com.github.TeamNewPipe:nanojson:e9d656ddb49a412a5a0a5d5ef20ca7ef09549996")
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.3")
     implementation("org.jsoup:jsoup:1.22.2")
     implementation("com.google.code.findbugs:jsr305:3.0.2")
     implementation("com.google.protobuf:protobuf-javalite:4.35.0")
