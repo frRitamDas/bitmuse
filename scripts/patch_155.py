@@ -51,6 +51,17 @@ def patch_main_activity() -> None:
     path.write_text(text, encoding='utf-8')
 
 
+def patch_gradle_dependency() -> None:
+    path = ROOT / 'app/build.gradle.kts'
+    text = path.read_text(encoding='utf-8')
+    bad = '    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.3")\n'
+    good = '    implementation(files(newPipeExtractorStripped))\n    implementation("com.github.TeamNewPipe:nanojson:e9d656ddb49a412a5a0a5d5ef20ca7ef09549996")\n'
+    if bad in text:
+        text = text.replace(bad, good, 1)
+    path.write_text(text, encoding='utf-8')
+
+
 if __name__ == '__main__':
     patch_main_activity()
+    patch_gradle_dependency()
     print('Pexpo 1.5.5 maintenance patch applied.')
