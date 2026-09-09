@@ -3,7 +3,7 @@
 <br/>
 <br/>
 
-<img src="" alt="Pexpo app icon" width="200" />
+<img src="https://github.com/frRitamDas/bitmuse/blob/main/Logo.png" alt="Pexpo app icon" width="200" />
 
 # Pexpo
 
