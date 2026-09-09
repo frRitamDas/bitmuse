@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: pexpo-android-${{ github.ref }}-${{ github.workflow_sha }}
@@ -104,13 +105,6 @@ jobs:
             printf 'keyPassword=%s\n' "$CI_STORE_PASSWORD"
           } > keystore.properties
         fi
-    - name: Apply verified Pexpo bug fixes
-      run: python3 scripts/one_time_pexpo_bugfix.py
-    - name: Verify patched source
-      run: |
-        grep -q 'loadChannels(force = true)' app/src/main/java/com/music/bitchord/ui/MainViewModel.kt
-        grep -q 'TRANSPORT_WIFI' app/src/main/java/com/music/bitchord/ui/screens/SettingsSheet.kt
-        grep -q 'Pexpo update required' app/src/main/java/com/music/bitchord/BitChordApplication.kt
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Build Pexpo v1.5.1.4
@@ -139,7 +133,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target main \
             --title 'Pexpo Music v1.5.1.4' \
-            --notes 'Pexpo Music v1.5.1.4\n\n### Major bug and system fixes for the Pexpo 1.5.4 release line\n- Fixed the Add an addon validation message so visible branding uses Pexpo.\n- Added Activity IME resize handling for edge-to-edge layouts.\n- Added global Compose IME-aware app resizing so dialogs, popups, sheets and other floating UI get usable space when the keyboard opens.\n- Keyboard-driven layout changes follow the system IME animation for smooth transitions.\n- Preserved the Pexpo 1.5.4 baseline, including Samsung/One UI floating mini-player stability fixes.\n- Updated the release/update version comparison to understand Pexpo four-part maintenance versions such as 1.5.1.4.\n- Release signing continues to prefer configured GitHub Actions secrets and never commits a private signing key.'
+            --notes 'Pexpo Music v1.5.1.4\n\n### Bug fixes\n- Fixed first-login account selector avatar refresh.\n- Fixed Wi-Fi/mobile transport indicator classification.\n- Added a legacy-build gate for builds below 1.5.1.4.'
         fi
         gh release upload v1.5.1.4 \
           --repo "$GITHUB_REPOSITORY" \
@@ -149,14 +143,24 @@ jobs:
           release-assets/pexpo-1.5.1.4-armeabi-v7a.apk \
           release-assets/pexpo-1.5.1.4-x86_64.apk \
           release-assets/SHA256SUMS.txt
-    - name: Commit patched source and clean temporary patch files
+    - name: Remove superseded releases and Actions artifacts
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        gh api --paginate "/repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[] | select(.tag_name != "v1.5.1.4") | .tag_name' | while read -r tag; do
+          [ -z "$tag" ] || gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+        done
+        gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts[] | select(.name != "pexpo-v1.5.1.4-release") | .id' | while read -r id; do
+          [ -z "$id" ] || gh api -X DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}" || true
+        done
+    - name: Finalize source
       if: always()
       run: |
         set -euo pipefail
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add app/src/main app/src/main/res/values/strings.xml
-        git rm -f scripts/patch_1514.py scripts/one_time_pexpo_bugfix.py .github/workflows/one-time-pexpo-1514-account-adaptive.yml .github/workflows/run-1514-patch.yml .github/workflows/patch-pr.yml PATCH_TRIGGER.txt .github/workflows/one-time-pexpo-bugfix.yml 2>/dev/null || true
-        if git diff --cached --quiet; then echo 'No source cleanup commit needed.'; exit 0; fi
+        if git diff --cached --quiet; then echo 'Source already finalized.'; exit 0; fi
         git commit -m 'fix: account avatar network indicator and legacy gate'
         git push origin main
