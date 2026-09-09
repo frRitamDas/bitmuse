@@ -104,6 +104,13 @@ jobs:
             printf 'keyPassword=%s\n' "$CI_STORE_PASSWORD"
           } > keystore.properties
         fi
+    - name: Apply verified Pexpo bug fixes
+      run: python3 scripts/one_time_pexpo_bugfix.py
+    - name: Verify patched source
+      run: |
+        grep -q 'loadChannels(force = true)' app/src/main/java/com/music/bitchord/ui/MainViewModel.kt
+        grep -q 'TRANSPORT_WIFI' app/src/main/java/com/music/bitchord/ui/screens/SettingsSheet.kt
+        grep -q 'Pexpo update required' app/src/main/java/com/music/bitchord/BitChordApplication.kt
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Build Pexpo v1.5.1.4
@@ -149,7 +156,7 @@ jobs:
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add app/src/main app/src/main/res/values/strings.xml
-        git rm -f scripts/patch_1514.py .github/workflows/one-time-pexpo-1514-account-adaptive.yml .github/workflows/run-1514-patch.yml .github/workflows/patch-pr.yml PATCH_TRIGGER.txt .github/workflows/one-time-pexpo-bugfix.yml 2>/dev/null || true
+        git rm -f scripts/patch_1514.py scripts/one_time_pexpo_bugfix.py .github/workflows/one-time-pexpo-1514-account-adaptive.yml .github/workflows/run-1514-patch.yml .github/workflows/patch-pr.yml PATCH_TRIGGER.txt .github/workflows/one-time-pexpo-bugfix.yml 2>/dev/null || true
         if git diff --cached --quiet; then echo 'No source cleanup commit needed.'; exit 0; fi
-        git commit -m 'chore: finalize v1.5.1.4 account adaptive fixes'
+        git commit -m 'fix: account avatar network indicator and legacy gate'
         git push origin main
