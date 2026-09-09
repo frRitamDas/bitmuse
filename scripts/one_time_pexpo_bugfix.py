@@ -41,15 +41,32 @@ replace(
     """    val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
 """,
     """    val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
-    val activeTransport = remember(metered) {
+    var activeTransport by remember { mutableStateOf("other") }
+    DisposableEffect(context) {
         val manager = context.getSystemService(android.net.ConnectivityManager::class.java)
-        val network = manager?.activeNetwork
-        val capabilities = network?.let { manager.getNetworkCapabilities(it) }
-        when {
-            capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true -> "wifi"
-            capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true -> "cellular"
-            else -> "other"
+        fun updateTransport() {
+            val network = manager?.activeNetwork
+            val capabilities = network?.let { manager.getNetworkCapabilities(it) }
+            activeTransport = when {
+                capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true -> "wifi"
+                capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true -> "cellular"
+                else -> "other"
+            }
         }
+        updateTransport()
+        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) = updateTransport()
+            override fun onLost(network: android.net.Network) = updateTransport()
+            override fun onCapabilitiesChanged(network: android.net.Network, capabilities: android.net.NetworkCapabilities) {
+                activeTransport = when {
+                    capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+                    capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+                    else -> "other"
+                }
+            }
+        }
+        runCatching { manager?.registerDefaultNetworkCallback(callback) }
+        onDispose { runCatching { manager?.unregisterNetworkCallback(callback) } }
     }
     val onWifi = activeTransport == "wifi"
     val onCellular = activeTransport == "cellular"
