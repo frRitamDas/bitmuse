@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: pexpo-android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-dev-debug:
     if: github.event_name == 'pull_request'
