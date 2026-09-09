@@ -4,11 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ViewCompact
@@ -60,8 +58,8 @@ fun AdaptiveDisplayCompatibilitySetting() {
 
 /**
  * Global compact-layout workaround used at the existing app root.
- * It combines width-aware density, short-window density, font scaling and
- * safeDrawing insets. OFF is a true pass-through.
+ * It combines width-aware density, short-window density and font scaling.
+ * OFF is a true pass-through so the normal layout is unchanged.
  */
 @Composable
 fun AdaptiveDisplayCompatibility(content: @Composable () -> Unit) {
@@ -76,7 +74,7 @@ fun AdaptiveDisplayCompatibility(content: @Composable () -> Unit) {
     val widthDp = configuration.screenWidthDp.coerceAtLeast(1)
     val heightDp = configuration.screenHeightDp.coerceAtLeast(1)
 
-    // 360dp is the compact phone baseline. Never enlarge a normal layout.
+    // 360dp is the compact-phone baseline. Never enlarge a normal layout.
     val widthScale = (widthDp / 360f).coerceIn(0.86f, 1f)
 
     // Split-screen/floating windows can be short even when their width is fine.
@@ -95,11 +93,10 @@ fun AdaptiveDisplayCompatibility(content: @Composable () -> Unit) {
             fontScale = fontScale,
         ),
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.safeDrawing),
-        ) {
+        // Do not depend on WindowInsets.safeDrawing here: this project’s
+        // Compose Foundation version does not expose that API. The existing
+        // app/root insets remain responsible for system-bar handling.
+        Box(Modifier.fillMaxWidth()) {
             content()
         }
     }
