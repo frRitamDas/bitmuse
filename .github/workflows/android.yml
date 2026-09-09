@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: pexpo-android-${{ github.ref }}
+  group: pexpo-android-${{ github.ref }}-${{ github.workflow_sha }}
   cancel-in-progress: true
 
 jobs:
