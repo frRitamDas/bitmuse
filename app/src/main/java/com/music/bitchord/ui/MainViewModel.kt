@@ -345,6 +345,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _googleAccounts.value = authStore.sessions
         _activeAccountId.value = authStore.activeSession?.accountId
         _activeProfileId.value = authStore.activeProfileId
+
+        // A fresh sign-in can have the session immediately while the YouTube
+        // channel/profile thumbnails are still missing. Reuse the existing
+        // authoritative channel fetch; its result updates the same session
+        // objects while the selector is already open, so no restart is needed.
+        if (authStore.sessions.any { session ->
+                session.profiles.any { profile -> profile.avatar.isNullOrBlank() }
+            }) {
+            loadChannels(force = true)
+        }
     }
 
     private val _history = MutableStateFlow<UiState<List<Song>>>(UiState.Loading)

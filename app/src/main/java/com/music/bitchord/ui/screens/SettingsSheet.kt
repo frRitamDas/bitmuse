@@ -170,6 +170,35 @@ fun SettingsScreen(
     val wifiQuality by AppSettings.audioQualityWifi.collectAsStateWithLifecycle()
     val cellularQuality by AppSettings.audioQualityCellular.collectAsStateWithLifecycle()
     val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
+    var activeTransport by remember { mutableStateOf("other") }
+    DisposableEffect(context) {
+        val manager = context.getSystemService(android.net.ConnectivityManager::class.java)
+        fun updateTransport() {
+            val network = manager?.activeNetwork
+            val capabilities = network?.let { manager.getNetworkCapabilities(it) }
+            activeTransport = when {
+                capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true -> "wifi"
+                capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true -> "cellular"
+                else -> "other"
+            }
+        }
+        updateTransport()
+        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) = updateTransport()
+            override fun onLost(network: android.net.Network) = updateTransport()
+            override fun onCapabilitiesChanged(network: android.net.Network, capabilities: android.net.NetworkCapabilities) {
+                activeTransport = when {
+                    capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+                    capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+                    else -> "other"
+                }
+            }
+        }
+        runCatching { manager?.registerDefaultNetworkCallback(callback) }
+        onDispose { runCatching { manager?.unregisterNetworkCallback(callback) } }
+    }
+    val onWifi = activeTransport == "wifi"
+    val onCellular = activeTransport == "cellular"
     val crossfade by AppSettings.crossfadeSeconds.collectAsStateWithLifecycle()
     val smartFade by AppSettings.smartFadeEnabled.collectAsStateWithLifecycle()
     val automixPerformance by AppSettings.automixPerformanceMode.collectAsStateWithLifecycle()
@@ -357,7 +386,7 @@ fun SettingsScreen(
             SettingsRow(
                 icon = Icons.Rounded.Wifi,
                 title = stringResource(R.string.on_wifi),
-                badge = stringResource(R.string.in_use).takeIf { metered == false },
+                badge = stringResource(R.string.in_use).takeIf { onWifi },
                 value = wifiQuality.localizedLabel(),
                 onClick = { picking = QualityTarget.WIFI },
             )
@@ -365,7 +394,7 @@ fun SettingsScreen(
             SettingsRow(
                 icon = Icons.Rounded.SignalCellularAlt,
                 title = stringResource(R.string.on_mobile_data),
-                badge = stringResource(R.string.in_use).takeIf { metered == true },
+                badge = stringResource(R.string.in_use).takeIf { onCellular },
                 value = cellularQuality.localizedLabel(),
                 onClick = { picking = QualityTarget.CELLULAR },
             )
