@@ -38,6 +38,12 @@ replace(
 
 replace(
     "app/src/main/java/com/music/bitchord/ui/screens/SettingsSheet.kt",
+    "import androidx.compose.runtime.Composable\n",
+    "import androidx.compose.runtime.Composable\nimport androidx.compose.runtime.DisposableEffect\n",
+    "Bug #2 DisposableEffect import",
+)
+replace(
+    "app/src/main/java/com/music/bitchord/ui/screens/SettingsSheet.kt",
     """    val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
 """,
     """    val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
