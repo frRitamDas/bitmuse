@@ -1,0 +1,92 @@
+name: One-time Pexpo v1.5.1.4 account fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Remove Compact Mode and fix account selector state
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly 1 match, found {count}')
+              p.write_text(text.replace(old, new), encoding='utf-8')
+
+          # Compact Mode was experimental and is being removed completely.
+          Path('app/src/main/java/com/music/bitchord/ui/components/AdaptiveDisplayCompatibility.kt').unlink(missing_ok=True)
+
+          replace_once(
+              'app/src/main/java/com/music/bitchord/MainActivity.kt',
+              'import com.music.bitchord.ui.components.AccountProfileSelector\nimport com.music.bitchord.ui.components.AdaptiveDisplayCompatibility\n',
+              'import com.music.bitchord.ui.components.AccountProfileSelector\n',
+          )
+          replace_once(
+              'app/src/main/java/com/music/bitchord/MainActivity.kt',
+              '''                AdaptiveDisplayCompatibility {\n                    BoxWithConstraints(Modifier.fillMaxSize().imePadding()) {\n                        BitChordApp(darkTheme = darkTheme, windowWidth = maxWidth, appBackdrop = appBackdrop)\n                    }\n                }''',
+              '''                BoxWithConstraints(Modifier.fillMaxSize().imePadding()) {\n                    BitChordApp(darkTheme = darkTheme, windowWidth = maxWidth, appBackdrop = appBackdrop)\n                }''',
+          )
+
+          replace_once(
+              'app/src/main/java/com/music/bitchord/data/settings/AppSettings.kt',
+              '    /** Manual opt-in for runtime display compatibility adaptations. */\n    val adaptiveDisplayCompatibility = MutableStateFlow(false)\n',
+              '',
+          )
+
+          replace_once(
+              'app/src/main/java/com/music/bitchord/ui/screens/SettingsSheet.kt',
+              'import com.music.bitchord.ui.components.AdaptiveDisplayCompatibilitySetting\n',
+              '',
+          )
+          replace_once(
+              'app/src/main/java/com/music/bitchord/ui/screens/SettingsSheet.kt',
+              '            AdaptiveDisplayCompatibilitySetting()\n            RowDivider()\n',
+              '            RowDivider()\n',
+          )
+
+          # The auth/session is persisted before the home UI is shown, but the
+          # selector can be opened in the same composition frame as sign-in.
+          # Refresh its StateFlow from the persistent AuthStore at the moment the
+          # selector is opened, eliminating the first-login empty-list race.
+          replace_once(
+              'app/src/main/java/com/music/bitchord/ui/MainViewModel.kt',
+              '''    val activeProfileId: StateFlow<String?> = _activeProfileId.asStateFlow()\n\n''',
+              '''    val activeProfileId: StateFlow<String?> = _activeProfileId.asStateFlow()\n\n    /** Re-read persisted Google sessions before opening the account selector. */\n    fun refreshGoogleAccounts() {\n        _googleAccounts.value = authStore.sessions\n        _activeAccountId.value = authStore.activeSession?.accountId\n        _activeProfileId.value = authStore.activeProfileId\n    }\n\n''',
+          )
+
+          replace_once(
+              'app/src/main/java/com/music/bitchord/MainActivity.kt',
+              'onClick = { showAccountSelector = true },',
+              'onClick = { viewModel.refreshGoogleAccounts(); showAccountSelector = true },',
+          )
+
+          print('v1.5.1.4 source patch applied successfully')
+
+      - name: Verify no Compact Mode references remain
+        run: |
+          set -euo pipefail
+          ! grep -R "AdaptiveDisplayCompatibility\|adaptiveDisplayCompatibility" app/src/main || true
+
+      - name: Commit patch and remove one-time workflow
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main
+          git rm -f .github/workflows/one-time-pexpo-1514-account-fix.yml
+          git commit -m 'fix: remove compact mode and refresh account selector'
+          git push origin main
