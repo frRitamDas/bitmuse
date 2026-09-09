@@ -340,6 +340,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _activeProfileId = MutableStateFlow(authStore.activeProfileId)
     val activeProfileId: StateFlow<String?> = _activeProfileId.asStateFlow()
 
+    /** Re-read persisted Google sessions before opening the account selector. */
+    fun refreshGoogleAccounts() {
+        _googleAccounts.value = authStore.sessions
+        _activeAccountId.value = authStore.activeSession?.accountId
+        _activeProfileId.value = authStore.activeProfileId
+    }
+
     private val _history = MutableStateFlow<UiState<List<Song>>>(UiState.Loading)
     val history: StateFlow<UiState<List<Song>>> = _history.asStateFlow()
 

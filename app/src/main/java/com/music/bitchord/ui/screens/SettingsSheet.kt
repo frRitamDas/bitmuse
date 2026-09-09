@@ -116,7 +116,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.SingletonImageLoader
 import coil3.compose.AsyncImage
 import com.music.bitchord.ui.components.isGlassSupported
-import com.music.bitchord.ui.components.AdaptiveDisplayCompatibilitySetting
 import com.music.bitchord.ui.components.languageDisplayNameRes
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
@@ -553,7 +552,6 @@ fun SettingsScreen(
         }
 
         SettingsGroup(header = stringResource(R.string.appearance)) {
-            AdaptiveDisplayCompatibilitySetting()
             RowDivider()
             SettingsRow(icon = Icons.Rounded.Brightness4, title = stringResource(R.string.theme))
             SegmentedControl(

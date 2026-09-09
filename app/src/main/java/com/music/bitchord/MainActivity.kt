@@ -1,6 +1,5 @@
 package com.music.bitchord
 import com.music.bitchord.ui.components.AccountProfileSelector
-import com.music.bitchord.ui.components.AdaptiveDisplayCompatibility
 
 import android.Manifest
 import android.content.Intent
@@ -278,10 +277,8 @@ class MainActivity : AppCompatActivity() {
                 // longer exists and a page squeezed to a sliver to pay for it.
                 // A measured constraint cannot be stale — it is the very width
                 // the split is about to be laid out in.
-                AdaptiveDisplayCompatibility {
-                    BoxWithConstraints(Modifier.fillMaxSize().imePadding()) {
-                        BitChordApp(darkTheme = darkTheme, windowWidth = maxWidth, appBackdrop = appBackdrop)
-                    }
+                BoxWithConstraints(Modifier.fillMaxSize().imePadding()) {
+                    BitChordApp(darkTheme = darkTheme, windowWidth = maxWidth, appBackdrop = appBackdrop)
                 }
                 }
             }
@@ -2360,7 +2357,7 @@ private fun BitChordApp(
                             TopBarDownloadButton(onClick = { showDownloadManager = true })
                             TopBarAccountButton(
                                 account = account,
-                                onClick = { showAccountSelector = true },
+                                onClick = { viewModel.refreshGoogleAccounts(); showAccountSelector = true },
                                 onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
                             )
                         }

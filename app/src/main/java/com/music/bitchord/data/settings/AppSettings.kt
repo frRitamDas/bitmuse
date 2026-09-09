@@ -327,8 +327,6 @@ object AppSettings {
 
     /** Real backdrop-sampled glass (blur, lens refraction) on the floating nav bar, Android 12+ only. */
     val liquidGlass = MutableStateFlow(false)
-    /** Manual opt-in for runtime display compatibility adaptations. */
-    val adaptiveDisplayCompatibility = MutableStateFlow(false)
 
     /** Blurs unfocused lyric lines, keeping the active line sharp. */
     val lyricsBlur = MutableStateFlow(true)
