@@ -47,7 +47,7 @@ fun AdaptiveDisplayCompatibilitySetting() {
             }
             Switch(
                 checked = enabled,
-                onCheckedChange = AppSettings::setAdaptiveDisplayCompatibility,
+                onCheckedChange = { AppSettings.adaptiveDisplayCompatibility.value = it },
             )
         }
         Text("CAUTION — USE ONLY IF YOU HAVE A DISPLAY OR LAYOUT PROBLEM", style = MaterialTheme.typography.labelSmall, color = red, modifier = Modifier.padding(top = 12.dp))
@@ -60,10 +60,9 @@ fun AdaptiveDisplayCompatibilitySetting() {
  * phone-sized layout or whose edge-to-edge system bars/cutouts consume part of
  * the content area.
  *
- * This is deliberately applied around the complete app root. Scaling only a
- * few components cannot fix a parent Row/Column that already measured itself
- * too wide, while padding only the individual bars leaves dialogs and sheets
- * exposed to the same clipping problem.
+ * The layer is applied around the complete app root. Scaling only individual
+ * components cannot fix a parent that measured itself too wide, while padding
+ * only the system bars leaves dialogs and sheets exposed to the same clipping.
  */
 @Composable
 fun AdaptiveDisplayCompatibility(content: @Composable () -> Unit) {
@@ -78,26 +77,20 @@ fun AdaptiveDisplayCompatibility(content: @Composable () -> Unit) {
     val widthDp = configuration.screenWidthDp.coerceAtLeast(1)
     val heightDp = configuration.screenHeightDp.coerceAtLeast(1)
 
-    // The app's compact layout is designed around a 360dp phone width. Below
-    // that point, reduce the logical density smoothly instead of waiting for a
-    // single hard threshold. Never enlarge the UI: the feature exists to make
-    // an oversized layout fit into a smaller usable viewport.
+    // The phone layout is designed around 360dp. Below that point, reduce the
+    // logical density smoothly instead of using a single hard threshold.
     val widthScale = (widthDp / 360f).coerceIn(0.82f, 1f)
 
-    // Very short portrait viewports are commonly caused by split-screen,
-    // floating-window or OEM display compatibility modes. Give those windows
-    // a small additional reduction, capped so text never becomes unusably tiny.
+    // Short portrait windows are common in split-screen/floating-window modes.
     val heightScale = if (heightDp < 600) {
         (heightDp / 600f).coerceIn(0.92f, 1f)
     } else {
         1f
     }
 
-    // Respect Android's user font scale while keeping the compatibility layer
-    // from multiplying it twice. The effective font scale is bounded to a
-    // readable range after the geometric reduction.
     val densityScale = minOf(widthScale, heightScale)
-    val adjustedFontScale = (baseDensity.fontScale * densityScale).coerceIn(0.85f, baseDensity.fontScale)
+    val adjustedFontScale = (baseDensity.fontScale * densityScale)
+        .coerceIn(0.85f, baseDensity.fontScale)
 
     CompositionLocalProvider(
         LocalDensity provides Density(
@@ -105,21 +98,12 @@ fun AdaptiveDisplayCompatibility(content: @Composable () -> Unit) {
             fontScale = adjustedFontScale,
         ),
     ) {
-        content()
-    }
-}
-
-/**
- * Apply the platform's safe drawing area when compatibility mode is enabled.
- * This handles status-bar/navigation-bar/cutout insets for the entire root,
- * including floating sheets and dialogs hosted inside the main composition.
- */
-@Composable
-fun Modifier.adaptiveDisplaySafeArea(): Modifier {
-    val enabled by AppSettings.adaptiveDisplayCompatibility.collectAsStateWithLifecycle()
-    return if (enabled) {
-        windowInsetsPadding(WindowInsets.safeDrawing)
-    } else {
-        this
+        androidx.compose.foundation.layout.Box(
+            Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.safeDrawing),
+        ) {
+            content()
+        }
     }
 }
