@@ -1835,11 +1835,11 @@ private fun BitChordApp(
                                 webSession = WebSessionMode.SIGN_IN
                             },
                             onSwitchChannel = {
-                                // Asked for on open rather than on sign-in: it
-                                // is a request per session that most listeners,
-                                // who have exactly one channel, never need.
-                                viewModel.loadChannels()
-                                showChannelPicker = true
+                                // Account & integrations uses the exact same account/profile
+                                // selector as the Home avatar. Refresh persisted sessions first
+                                // so a newly signed-in account and avatar appear immediately.
+                                viewModel.refreshGoogleAccounts()
+                                showAccountSelector = true
                             },
                             onSignOut = { viewModel.signOut() },
                             onOpenListenBrainzLogin = { showListenBrainzLogin = true },
@@ -2357,7 +2357,14 @@ private fun BitChordApp(
                             TopBarDownloadButton(onClick = { showDownloadManager = true })
                             TopBarAccountButton(
                                 account = account,
-                                onClick = { viewModel.refreshGoogleAccounts(); showAccountSelector = true },
+                                onClick = {
+                                    if (signedIn) {
+                                        viewModel.refreshGoogleAccounts()
+                                        showAccountSelector = true
+                                    } else {
+                                        showSettings = true
+                                    }
+                                },
                                 onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
                             )
                         }
