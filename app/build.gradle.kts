@@ -21,11 +21,11 @@ val lastfmApiKey: String = (localProps.getProperty("LASTFM_API_KEY") ?: System.g
 val lastfmSecret: String = (localProps.getProperty("LASTFM_SECRET") ?: System.getenv("LASTFM_SECRET") ?: "").trim()
 
 android {
-    namespace = "com.music.bitchord"
+    namespace = "com.music.pexpo"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.pexpo.music"
+        applicationId = "com.music.pexpo"
         minSdk = 26
         targetSdk = 36
         versionCode = 19
@@ -55,7 +55,7 @@ android {
     productFlavors {
         create("dev") {
             dimension = "env"
-            applicationId = "com.dev.bitchord"
+            applicationId = "com.dev.pexpo"
             resValue("string", "app_name", "Pexpo Music Dev")
         }
         create("prod") {
@@ -152,7 +152,6 @@ dependencies {
     implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("io.ktor:ktor-client-websockets:3.0.3")
-    implementation(files(newPipeExtractorStripped))
     implementation(files(newPipeExtractorStripped))
     implementation("com.github.TeamNewPipe:nanojson:e9d656ddb49a412a5a0a5d5ef20ca7ef09549996")
     implementation("org.jsoup:jsoup:1.22.2")
