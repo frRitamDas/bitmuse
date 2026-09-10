@@ -200,9 +200,44 @@ def rename_pexpo_identity() -> None:
             path.rename(path.with_name(new_name))
 
 
+def verify_pexpo_identity() -> None:
+    """Fail the build if the checked-out source still exposes the old package identity."""
+    source_root = ROOT / 'app/src'
+    if not source_root.exists():
+        raise RuntimeError('Pexpo identity verification: app/src does not exist')
+
+    forbidden = ('com.music.bitchord', 'package com.music.bitchord', 'import com.music.bitchord')
+    compatibility_allowed = 'bitchord_settings'
+    violations = []
+    for path in source_root.rglob('*'):
+        if not path.is_file() or path.suffix.lower() not in {'.kt', '.java', '.xml', '.gradle', '.kts', '.properties', '.json'}:
+            continue
+        try:
+            text = path.read_text(encoding='utf-8')
+        except (UnicodeDecodeError, OSError):
+            continue
+        for token in forbidden:
+            if token in text:
+                violations.append(f'{path}: {token}')
+        leftovers = [line.strip() for line in text.splitlines() if 'bitchord' in line.lower() and compatibility_allowed not in line.lower()]
+        if leftovers:
+            violations.extend(f'{path}: {line}' for line in leftovers[:3])
+
+    gradle = (ROOT / 'app/build.gradle.kts').read_text(encoding='utf-8')
+    if 'namespace = "com.music.pexpo"' not in gradle:
+        violations.append('app/build.gradle.kts: namespace is not com.music.pexpo')
+    if 'applicationId = "com.music.pexpo"' not in gradle:
+        violations.append('app/build.gradle.kts: production applicationId is not com.music.pexpo')
+
+    if violations:
+        details = '\n'.join(violations[:20])
+        raise RuntimeError(f'Pexpo identity verification failed:\n{details}')
+
+
 if __name__ == '__main__':
     patch_main_activity()
     patch_gradle_dependency()
     patch_canvas_network_rule()
     rename_pexpo_identity()
-    print('Pexpo 1.5.5 maintenance patch applied: account routing, Canvas transport gating, and BitChord -> Pexpo identity rename.')
+    verify_pexpo_identity()
+    print('Pexpo 1.5.5 maintenance patch applied: account routing, Canvas transport gating, BitChord -> Pexpo identity rename, and identity verification.')
