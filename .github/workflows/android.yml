@@ -111,6 +111,17 @@ jobs:
       run: chmod +x gradlew
     - name: Build Pexpo v1.5.5
       run: ./gradlew assembleProdRelease --stacktrace
+    - name: Verify Pexpo release identity
+      run: |
+        set -euo pipefail
+        APK=app/build/outputs/apk/prod/release/app-prod-universal-release.apk
+        [ -s "$APK" ]
+        AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+        [ -n "$AAPT" ]
+        BADGING=$("$AAPT" dump badging "$APK")
+        echo "$BADGING" | grep -F "package: name='com.music.pexpo'" >/dev/null
+        echo "$BADGING" | grep -F "versionName='1.5.5'" >/dev/null
+        echo 'Verified production APK identity: com.music.pexpo v1.5.5'
     - name: Prepare release assets
       run: |
         set -euo pipefail
