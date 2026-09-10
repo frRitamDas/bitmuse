@@ -98,6 +98,15 @@ fun HomeScreen(
     loadingMore: Boolean = false,
     recentlyPlayedLoading: Boolean = false,
 ) {
+    // Reuse Pexpo's existing skeleton UI when the device has no active
+    // network. This intentionally does not introduce another skeleton
+    // implementation: offline Home should look exactly like Home loading.
+    val homeContext = androidx.compose.ui.platform.LocalContext.current
+    val networkAvailableForHome = remember {
+        homeContext.getSystemService(android.net.ConnectivityManager::class.java)
+            ?.activeNetwork != null
+    }
+
     PullToRefresh(
         refreshing = refreshing,
         onRefresh = onRefresh,
@@ -124,8 +133,16 @@ fun HomeScreen(
             }
             when (state) {
                 is UiState.Loading -> feedSkeleton()
-                is UiState.Error -> item {
-                    MessageState(state.message, actionLabel = stringResource(R.string.retry), onAction = onRetry)
+                is UiState.Error -> {
+                    if (!networkAvailableForHome) {
+                        // No connection: keep the established Home skeleton
+                        // instead of replacing the page with a hard error card.
+                        feedSkeleton()
+                    } else {
+                        item {
+                            MessageState(state.message, actionLabel = stringResource(R.string.retry), onAction = onRetry)
+                        }
+                    }
                 }
                 is UiState.Success -> {
                     if (recentlyPlayedLoading) recentlyPlayedSkeleton()
