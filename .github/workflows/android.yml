@@ -122,8 +122,11 @@ jobs:
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
       run: |
         set -euo pipefail
+        export LC_ALL=C
         APK=app/build/outputs/apk/prod/release/app-prod-universal-release.apk
-        keytool -list -v -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > expected-cert.txt
+        keytool -exportcert -rfc -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > expected-cert.pem
+        EXPECTED=$(openssl x509 -in expected-cert.pem -noout -fingerprint -sha256 | sed 's/.*=//' | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')
+        [ "${#EXPECTED}" -eq 64 ]
         APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
         if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
           echo 'Unable to locate executable apksigner in the Android SDK build-tools.' >&2
@@ -131,11 +134,21 @@ jobs:
           exit 1
         fi
         echo "Using apksigner: $APKSIGNER"
-        "$APKSIGNER" verify --verbose --print-certs "$APK" > apk-cert.txt
-        EXPECTED=$(grep -m1 '^ *SHA256:' expected-cert.txt | sed 's/.*SHA256: *//')
-        ACTUAL=$(grep -m1 'Signer #1 certificate SHA-256 digest:' apk-cert.txt | sed 's/.*: *//')
-        [ -n "$EXPECTED" ] && [ -n "$ACTUAL" ]
-        [ "${EXPECTED//:/}" = "${ACTUAL//:/}" ]
+        set +e
+        VERIFY_OUTPUT=$("$APKSIGNER" verify --verbose --print-certs "$APK" 2>&1)
+        VERIFY_STATUS=$?
+        set -e
+        printf '%s\n' "$VERIFY_OUTPUT" > apk-cert.txt
+        printf '%s\n' "$VERIFY_OUTPUT"
+        if [ "$VERIFY_STATUS" -ne 0 ]; then
+          echo 'APK signature verification failed; refusing to publish the release.' >&2
+          exit "$VERIFY_STATUS"
+        fi
+        ACTUAL=$(printf '%s\n' "$VERIFY_OUTPUT" | grep -m1 'Signer #1 certificate SHA-256 digest:' | sed 's/.*: *//' | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')
+        [ "${#ACTUAL}" -eq 64 ]
+        echo "Expected permanent certificate SHA-256: $EXPECTED"
+        echo "APK certificate SHA-256:              $ACTUAL"
+        [ "$EXPECTED" = "$ACTUAL" ]
         echo 'Verified APK certificate matches the permanent Pexpo release keystore.'
     - name: Prepare release assets
       run: |
