@@ -101,6 +101,36 @@ jobs:
           printf 'keyPassword=%s\n' "$KEY_PASSWORD"
         } > keystore.properties
         echo 'Permanent Pexpo release keystore validated and selected.'
+    - name: Verify permanent key is the same identity used by Pexpo 1.5.5
+      env:
+        GH_TOKEN: ${{ github.token }}
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      run: |
+        set -euo pipefail
+        export LC_ALL=C
+        APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+        [ -x "$APKSIGNER" ]
+        mkdir -p signing-baseline
+        gh release download v1.5.5 --repo "$GITHUB_REPOSITORY" --pattern 'pexpo-1.5.5-universal.apk' --dir signing-baseline --clobber
+        BASELINE=signing-baseline/pexpo-1.5.5-universal.apk
+        [ -s "$BASELINE" ]
+        keytool -exportcert -rfc -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > expected-cert.pem
+        EXPECTED=$(openssl x509 -in expected-cert.pem -noout -fingerprint -sha256 | sed 's/.*=//' | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')
+        BASELINE_OUTPUT=$("$APKSIGNER" verify --verbose --print-certs "$BASELINE" 2>&1)
+        printf '%s\n' "$BASELINE_OUTPUT" > baseline-cert.txt
+        echo "$BASELINE_OUTPUT"
+        BASELINE_CERT=$(printf '%s\n' "$BASELINE_OUTPUT" | grep -m1 'certificate SHA-256 digest:' | sed 's/.*: *//' | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')
+        [ "${#EXPECTED}" -eq 64 ]
+        [ "${#BASELINE_CERT}" -eq 64 ]
+        echo "Permanent keystore SHA-256: $EXPECTED"
+        echo "Pexpo 1.5.5 SHA-256:        $BASELINE_CERT"
+        if [ "$EXPECTED" != "$BASELINE_CERT" ]; then
+          echo 'FATAL: the configured KEYSTORE_BASE64 is NOT the certificate that signed Pexpo 1.5.5.' >&2
+          echo 'Do not publish 1.5.6. Restore the original permanent Pexpo signing secrets before retrying.' >&2
+          exit 1
+        fi
+        echo 'Verified: the configured permanent keystore matches the Pexpo 1.5.5 signing identity.'
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Build Pexpo v1.5.6
@@ -116,40 +146,53 @@ jobs:
         echo "$BADGING" | grep -F "versionCode='20'" >/dev/null
         echo "$BADGING" | grep -F "versionName='1.5.6'" >/dev/null
         echo 'Verified production APK identity: com.music.pexpo v1.5.6 (versionCode 20)'
-    - name: Verify release is signed with the permanent Pexpo certificate
+    - name: Force production APKs to the permanent Pexpo certificate
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      run: |
+        set -euo pipefail
+        APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+        [ -x "$APKSIGNER" ]
+        for APK in app/build/outputs/apk/prod/release/*.apk; do
+          [ -s "$APK" ] || continue
+          TMP="${APK}.signed"
+          "$APKSIGNER" sign \
+            --ks pexpo-release.jks \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:KEYSTORE_PASSWORD \
+            --key-pass env:KEY_PASSWORD \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --v4-signing-enabled false \
+            --out "$TMP" "$APK"
+          mv "$TMP" "$APK"
+        done
+        echo 'All production APKs were explicitly signed with the permanent Pexpo release keystore.'
+    - name: Verify release certificate and upgrade identity
       env:
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
       run: |
         set -euo pipefail
         export LC_ALL=C
-        APK=app/build/outputs/apk/prod/release/app-prod-universal-release.apk
+        APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
         keytool -exportcert -rfc -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > expected-cert.pem
         EXPECTED=$(openssl x509 -in expected-cert.pem -noout -fingerprint -sha256 | sed 's/.*=//' | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')
         [ "${#EXPECTED}" -eq 64 ]
-        APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
-        if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
-          echo 'Unable to locate executable apksigner in the Android SDK build-tools.' >&2
-          find "$ANDROID_HOME/build-tools" -type f -name apksigner -print >&2 || true
-          exit 1
-        fi
-        echo "Using apksigner: $APKSIGNER"
-        set +e
-        VERIFY_OUTPUT=$("$APKSIGNER" verify --verbose --print-certs "$APK" 2>&1)
-        VERIFY_STATUS=$?
-        set -e
-        printf '%s\n' "$VERIFY_OUTPUT" > apk-cert.txt
-        printf '%s\n' "$VERIFY_OUTPUT"
-        if [ "$VERIFY_STATUS" -ne 0 ]; then
-          echo 'APK signature verification failed; refusing to publish the release.' >&2
-          exit "$VERIFY_STATUS"
-        fi
-        ACTUAL=$(printf '%s\n' "$VERIFY_OUTPUT" | grep -m1 'Signer #1 certificate SHA-256 digest:' | sed 's/.*: *//' | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')
-        [ "${#ACTUAL}" -eq 64 ]
-        echo "Expected permanent certificate SHA-256: $EXPECTED"
-        echo "APK certificate SHA-256:              $ACTUAL"
-        [ "$EXPECTED" = "$ACTUAL" ]
-        echo 'Verified APK certificate matches the permanent Pexpo release keystore.'
+        for APK in app/build/outputs/apk/prod/release/*.apk; do
+          [ -s "$APK" ] || continue
+          OUTPUT=$("$APKSIGNER" verify --verbose --print-certs "$APK" 2>&1)
+          printf '%s\n' "$OUTPUT"
+          echo "$OUTPUT" | grep -F 'Verifies' >/dev/null
+          ACTUAL=$(printf '%s\n' "$OUTPUT" | grep -m1 'certificate SHA-256 digest:' | sed 's/.*: *//' | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')
+          [ "${#ACTUAL}" -eq 64 ]
+          echo "$(basename "$APK") -> $ACTUAL"
+          [ "$EXPECTED" = "$ACTUAL" ]
+        done
+        echo 'Verified: every Pexpo 1.5.6 production APK uses the permanent certificate that also signed 1.5.5.'
     - name: Prepare release assets
       run: |
         set -euo pipefail
@@ -187,9 +230,9 @@ jobs:
         - Normal network errors still retain the existing retry message when a connection is available.
 
         ### 🔐 Production & updates
-        - Version **1.5.6** uses the same permanent Pexpo release signing identity as 1.5.5, preserving the Android upgrade path.
+        - Version **1.5.6** is signed with exactly the same permanent Pexpo certificate as 1.5.5, preserving the Android upgrade path.
         - Production package remains `com.music.pexpo`.
-        - Added CI verification for package identity, version code/name, and permanent release certificate.
+        - CI verifies the 1.5.5 baseline certificate before building, explicitly signs every 1.5.6 APK, and verifies every final APK before publication.
         - Universal, arm64-v8a, armeabi-v7a and x86_64 APKs are provided with SHA-256 checksums.
 
         ## 🚀 Upgrade
