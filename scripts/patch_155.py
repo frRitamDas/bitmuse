@@ -1,6 +1,15 @@
 from pathlib import Path
+import re
 
 ROOT = Path('.')
+
+
+def first_existing(*relative_paths: str) -> Path:
+    for relative in relative_paths:
+        path = ROOT / relative
+        if path.exists():
+            return path
+    raise RuntimeError(f'None of the expected source paths exist: {relative_paths!r}')
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -12,39 +21,41 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 
 
 def patch_main_activity() -> None:
-    path = ROOT / 'app/src/main/java/com/music/bitchord/MainActivity.kt'
+    path = first_existing(
+        'app/src/main/java/com/music/pexpo/MainActivity.kt',
+        'app/src/main/java/com/music/bitchord/MainActivity.kt',
+    )
     text = path.read_text(encoding='utf-8')
-    text = replace_once(
-        text,
-        'onClick = { viewModel.refreshGoogleAccounts(); showAccountSelector = true },',
-        '''onClick = {
+
+    signed_in_marker = 'onClick = { viewModel.refreshGoogleAccounts(); showAccountSelector = true },'
+    signed_in_replacement = '''onClick = {
                                     if (signedIn) {
                                         viewModel.refreshGoogleAccounts()
                                         showAccountSelector = true
                                     } else {
                                         showSettings = true
                                     }
-                                },''',
-        'top-bar account routing',
-    )
-    text = replace_once(
-        text,
-        '''                            onSwitchChannel = {
+                                },'''
+    if signed_in_marker in text:
+        text = text.replace(signed_in_marker, signed_in_replacement, 1)
+
+    old_listen_as = '''                            onSwitchChannel = {
                                 // Asked for on open rather than on sign-in: it
                                 // is a request per session that most listeners,
                                 // who have exactly one channel, never need.
                                 viewModel.loadChannels()
                                 showChannelPicker = true
-                            },''',
-        '''                            onSwitchChannel = {
+                            },'''
+    new_listen_as = '''                            onSwitchChannel = {
                                 // Account & integrations uses the exact same account/profile
                                 // selector as the Home avatar. Refresh persisted sessions first
                                 // so a newly signed-in account and avatar appear immediately.
                                 viewModel.refreshGoogleAccounts()
                                 showAccountSelector = true
-                            },''',
-        'settings Listen as routing',
-    )
+                            },'''
+    if old_listen_as in text:
+        text = text.replace(old_listen_as, new_listen_as, 1)
+
     path.write_text(text, encoding='utf-8')
 
 
@@ -59,62 +70,66 @@ def patch_gradle_dependency() -> None:
 
 
 def patch_canvas_network_rule() -> None:
-    path = ROOT / 'app/src/main/java/com/music/bitchord/ui/player/NowPlayingScreen.kt'
+    path = first_existing(
+        'app/src/main/java/com/music/pexpo/ui/player/NowPlayingScreen.kt',
+        'app/src/main/java/com/music/bitchord/ui/player/NowPlayingScreen.kt',
+    )
     text = path.read_text(encoding='utf-8')
-    old = '''    val canvasEnabled by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
-    val canvasOverCellular by AppSettings.canvasOverCellular.collectAsStateWithLifecycle()
-    val meteredConnection by AppSettings.meteredConnection.collectAsStateWithLifecycle()
-    // The switch turns the feature off outright; this is the narrower "not
-    // over cellular" case — see [AppSettings.canvasOverCellular] for why a
-    // clip's own loop makes that worth guarding separately from a still image.
-'''
-    new = '''    val canvasEnabled by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
+
+    # Replace the entire Canvas settings/gating section in one operation. This
+    # deliberately removes any stale/duplicate declaration left by an earlier
+    # patch attempt, making the maintenance script safe to rerun.
+    start = text.find('    val canvasEnabled by AppSettings.animatedCanvas.collectAsStateWithLifecycle()')
+    end_marker = '    var canvas by remember(song.videoId) { mutableStateOf<CanvasArtwork?>(null) }'
+    end = text.find(end_marker, start)
+    if start < 0 or end < 0:
+        if '    val canvasAllowedNow = canvasEnabled && when (canvasTransport)' in text and text.count('canvasAllowedNow') >= 1:
+            return
+        raise RuntimeError('Canvas network rule: expected Canvas state section not found')
+
+    new_section = '''    val canvasEnabled by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
     val canvasOverCellular by AppSettings.canvasOverCellular.collectAsStateWithLifecycle()
 
-    // Canvas is gated by the actual radio transport, not meteredness. Android
-    // permits Wi-Fi to be marked metered, so isActiveNetworkMetered cannot be
-    // used to decide whether the user's "over cellular" preference applies.
-    var canvasTransport by remember { mutableStateOf("other") }
+    // Canvas is gated by the actual default network transport, not meteredness.
+    // Wi-Fi may itself be marked metered, so AppSettings.meteredConnection is
+    // intentionally not used for this feature gate.
+    var canvasTransport by remember { mutableStateOf("offline") }
     DisposableEffect(context) {
         val manager = context.getSystemService(android.net.ConnectivityManager::class.java)
-        fun readTransport() {
-            val network = manager?.activeNetwork
-            val capabilities = network?.let { manager.getNetworkCapabilities(it) }
-            canvasTransport = when {
-                capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true -> "wifi"
-                capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true -> "cellular"
-                else -> "other"
-            }
-        }
-        fun transportOf(capabilities: android.net.NetworkCapabilities): String = when {
-            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
-            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+
+        fun transportOf(capabilities: android.net.NetworkCapabilities?): String = when {
+            capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true -> "wifi"
+            capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true -> "cellular"
+            capabilities == null -> "offline"
             else -> "other"
         }
-        readTransport()
+
         val callback = object : android.net.ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: android.net.Network) = readTransport()
-            override fun onLost(network: android.net.Network) = readTransport()
-            override fun onCapabilitiesChanged(network: android.net.Network, capabilities: android.net.NetworkCapabilities) {
+            override fun onCapabilitiesChanged(
+                network: android.net.Network,
+                capabilities: android.net.NetworkCapabilities,
+            ) {
                 canvasTransport = transportOf(capabilities)
             }
+
+            override fun onLost(network: android.net.Network) {
+                canvasTransport = "offline"
+            }
         }
+
         runCatching { manager?.registerDefaultNetworkCallback(callback) }
         onDispose { runCatching { manager?.unregisterNetworkCallback(callback) } }
     }
 
-    // Wi-Fi always permits Canvas. Cellular is controlled by the explicit
-    // preference. Offline/unknown transports do not start a Canvas request.
+    // Wi-Fi always permits Canvas. The user's preference only gates cellular.
+    // Other active transports retain Canvas support; offline does not request it.
     val canvasAllowedNow = canvasEnabled && when (canvasTransport) {
-        "wifi" -> true
         "cellular" -> canvasOverCellular
-        else -> false
+        "offline" -> false
+        else -> true
     }
 '''
-    if old in text:
-        text = text.replace(old, new, 1)
-    elif 'var canvasTransport by remember' not in text:
-        raise RuntimeError('Canvas network rule: expected source marker not found')
+    text = text[:start] + new_section + text[end:]
     path.write_text(text, encoding='utf-8')
 
 
@@ -138,6 +153,10 @@ def rename_pexpo_identity() -> None:
         if not path.is_file():
             continue
         if '.git' in path.parts or 'build' in path.parts or '.gradle' in path.parts:
+            continue
+        # Keep this migration script's legacy-token map intact; it is the
+        # mechanism that performs the source rename on future clean checkouts.
+        if path == ROOT / 'scripts/patch_155.py':
             continue
         if path.suffix.lower() in skip_suffixes:
             continue
@@ -163,7 +182,13 @@ def rename_pexpo_identity() -> None:
         ('bitchord', 'pexpo'),
     )
     paths = sorted(
-        [p for p in ROOT.rglob('*') if '.git' not in p.parts and 'build' not in p.parts and '.gradle' not in p.parts],
+        [
+            p for p in ROOT.rglob('*')
+            if '.git' not in p.parts
+            and 'build' not in p.parts
+            and '.gradle' not in p.parts
+            and p != ROOT / 'scripts/patch_155.py'
+        ],
         key=lambda p: len(p.parts),
         reverse=True,
     )
