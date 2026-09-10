@@ -16,9 +16,9 @@ def patch_home_offline_skeleton() -> None:
     replacement = '''    // Reuse Pexpo's existing skeleton UI when the device has no active
     // network. This intentionally does not introduce another skeleton
     // implementation: offline Home should look exactly like Home loading.
+    val homeContext = androidx.compose.ui.platform.LocalContext.current
     val networkAvailableForHome = remember {
-        androidx.compose.ui.platform.LocalContext.current
-            .getSystemService(android.net.ConnectivityManager::class.java)
+        homeContext.getSystemService(android.net.ConnectivityManager::class.java)
             ?.activeNetwork != null
     }
 
