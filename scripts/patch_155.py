@@ -14,7 +14,6 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 def patch_main_activity() -> None:
     path = ROOT / 'app/src/main/java/com/music/bitchord/MainActivity.kt'
     text = path.read_text(encoding='utf-8')
-
     text = replace_once(
         text,
         'onClick = { viewModel.refreshGoogleAccounts(); showAccountSelector = true },',
@@ -28,7 +27,6 @@ def patch_main_activity() -> None:
                                 },''',
         'top-bar account routing',
     )
-
     text = replace_once(
         text,
         '''                            onSwitchChannel = {
@@ -47,7 +45,6 @@ def patch_main_activity() -> None:
                             },''',
         'settings Listen as routing',
     )
-
     path.write_text(text, encoding='utf-8')
 
 
@@ -70,8 +67,6 @@ def patch_canvas_network_rule() -> None:
     // The switch turns the feature off outright; this is the narrower "not
     // over cellular" case — see [AppSettings.canvasOverCellular] for why a
     // clip's own loop makes that worth guarding separately from a still image.
-    // clip's own loop makes that worth guarding separately from a still image.
-    val canvasAllowedNow = canvasEnabled && (meteredConnection != true || canvasOverCellular)
 '''
     new = '''    val canvasEnabled by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
     val canvasOverCellular by AppSettings.canvasOverCellular.collectAsStateWithLifecycle()
@@ -119,8 +114,7 @@ def patch_canvas_network_rule() -> None:
     if old in text:
         text = text.replace(old, new, 1)
     elif 'var canvasTransport by remember' not in text:
-        marker = '    val canvasOverCellular by AppSettings.canvasOverCellular.collectAsStateWithLifecycle()\n'
-        text = replace_once(path.as_posix(), marker, marker + new.split(marker, 1)[1], 'Canvas transport rule')
+        raise RuntimeError('Canvas network rule: expected source marker not found')
     path.write_text(text, encoding='utf-8')
 
 
@@ -162,8 +156,6 @@ def rename_pexpo_identity() -> None:
         if text != original:
             path.write_text(text, encoding='utf-8')
 
-    # Rename source/package files and directories after their contents have
-    # been updated. Deepest paths first avoid parent-directory collisions.
     rename_tokens = (
         ('BitChord', 'Pexpo'),
         ('Bitchord', 'Pexpo'),
