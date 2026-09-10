@@ -14,39 +14,39 @@ def add_import(text: str, imp: str) -> str:
 def patch_branding() -> None:
     for path in ROOT.glob('app/src/main/res/**/strings.xml'):
         text = path.read_text(encoding='utf-8')
-        new = text.replace('BitChord', 'Pexpo').replace('bitchord %1$s', 'Pexpo %1$s')
+        new = text.replace('Pexpo', 'Pexpo').replace('pexpo %1$s', 'Pexpo %1$s')
         if new != text:
             path.write_text(new, encoding='utf-8')
 
     # Visible/exported labels only. Never rename the Kotlin/package compatibility
-    # identifiers such as BitChordTheme or com.music.bitchord.
+    # identifiers such as PexpoTheme or com.music.pexpo.
     for path in ROOT.glob('app/src/main/java/**/*.kt'):
         text = path.read_text(encoding='utf-8')
         new = text
-        new = new.replace('Music/BitChord', 'Music/Pexpo')
-        new = new.replace('text = "BitChord"', 'text = "Pexpo"')
-        new = new.replace('appendLine("BitChord log —', 'appendLine("Pexpo log —')
-        new = new.replace('That doesn\'t look like a BitChord backup', "That doesn't look like a Pexpo backup")
+        new = new.replace('Music/Pexpo', 'Music/Pexpo')
+        new = new.replace('text = "Pexpo"', 'text = "Pexpo"')
+        new = new.replace('appendLine("Pexpo log —', 'appendLine("Pexpo log —')
+        new = new.replace('That doesn\'t look like a Pexpo backup', "That doesn't look like a Pexpo backup")
         if new != text:
             path.write_text(new, encoding='utf-8')
 
-    download_store = ROOT / 'app/src/main/java/com/music/bitchord/download/DownloadStore.kt'
+    download_store = ROOT / 'app/src/main/java/com/music/pexpo/download/DownloadStore.kt'
     if download_store.exists():
         text = download_store.read_text(encoding='utf-8')
-        new = text.replace('const val FOLDER = "BitChord"', 'const val FOLDER = "Pexpo"')
+        new = text.replace('const val FOLDER = "Pexpo"', 'const val FOLDER = "Pexpo"')
         if new != text:
             download_store.write_text(new, encoding='utf-8')
 
-    share_sheet = ROOT / 'app/src/main/java/com/music/bitchord/ui/replay/ReplayShareSheet.kt'
+    share_sheet = ROOT / 'app/src/main/java/com/music/pexpo/ui/replay/ReplayShareSheet.kt'
     if share_sheet.exists():
         text = share_sheet.read_text(encoding='utf-8')
-        new = text.replace('Environment.DIRECTORY_PICTURES}/BitChord', 'Environment.DIRECTORY_PICTURES}/Pexpo')
+        new = text.replace('Environment.DIRECTORY_PICTURES}/Pexpo', 'Environment.DIRECTORY_PICTURES}/Pexpo')
         if new != text:
             share_sheet.write_text(new, encoding='utf-8')
 
 
 def patch_account_menu() -> None:
-    path = ROOT / 'app/src/main/java/com/music/bitchord/ui/components/FrostedTopBar.kt'
+    path = ROOT / 'app/src/main/java/com/music/pexpo/ui/components/FrostedTopBar.kt'
     text = path.read_text(encoding='utf-8')
     start = text.find('@Composable\nfun TopBarAccountButton(')
     if start < 0:
@@ -121,7 +121,7 @@ fun TopBarAccountButton(
         'import androidx.compose.runtime.mutableStateOf',
         'import androidx.compose.runtime.setValue',
         'import androidx.lifecycle.viewmodel.compose.viewModel',
-        'import com.music.bitchord.ui.MainViewModel',
+        'import com.music.pexpo.ui.MainViewModel',
         'import androidx.compose.material.icons.rounded.AccountCircle',
         'import androidx.compose.material.icons.rounded.DeleteOutline',
         'import androidx.compose.material.icons.rounded.ManageAccounts',
@@ -131,9 +131,9 @@ fun TopBarAccountButton(
         text = text.replace(imp + '\n', '')
     path.write_text(text, encoding='utf-8')
 
-    main = ROOT / 'app/src/main/java/com/music/bitchord/MainActivity.kt'
+    main = ROOT / 'app/src/main/java/com/music/pexpo/MainActivity.kt'
     text = main.read_text(encoding='utf-8')
-    text = add_import(text, 'import com.music.bitchord.ui.components.AccountProfileSelector')
+    text = add_import(text, 'import com.music.pexpo.ui.components.AccountProfileSelector')
 
     # Collect the persistent Google account/profile list once at the app level.
     anchor = '    val signedIn by viewModel.signedIn.collectAsStateWithLifecycle()\n'
@@ -197,7 +197,7 @@ fun TopBarAccountButton(
 
 
 def patch_account_screen() -> None:
-    path = ROOT / 'app/src/main/java/com/music/bitchord/ui/screens/AccountAndScrobblingScreen.kt'
+    path = ROOT / 'app/src/main/java/com/music/pexpo/ui/screens/AccountAndScrobblingScreen.kt'
     text = path.read_text(encoding='utf-8')
     duplicate = '''            SettingsGroup { DestructiveRow(label = stringResource(R.string.sign_out), onClick = onSignOut) }\n'''
     if duplicate in text:
@@ -206,7 +206,7 @@ def patch_account_screen() -> None:
 
 
 def patch_replay_safety() -> None:
-    path = ROOT / 'app/src/main/java/com/music/bitchord/data/stats/ListeningStats.kt'
+    path = ROOT / 'app/src/main/java/com/music/pexpo/data/stats/ListeningStats.kt'
     text = path.read_text(encoding='utf-8')
     marker = '    private const val DIRECTORY = "listening"'
     comment = '    // Replay is device-local and must never be cleared by authentication changes.\n'
@@ -216,7 +216,7 @@ def patch_replay_safety() -> None:
 
 
 def patch_updater() -> None:
-    path = ROOT / 'app/src/main/java/com/music/bitchord/data/AppUpdateChecker.kt'
+    path = ROOT / 'app/src/main/java/com/music/pexpo/data/AppUpdateChecker.kt'
     text = path.read_text(encoding='utf-8')
     text = text.replace('import android.content.Intent\n', 'import android.content.Intent\nimport android.content.pm.PackageManager\n')
     text = text.replace('suspend fun check() = withContext(Dispatchers.IO) {', 'suspend fun check(context: Context) = withContext(Dispatchers.IO) {')
@@ -236,7 +236,7 @@ def patch_updater() -> None:
             }
             ?.firstOrNull()'''
     text = text.replace(old_asset, new_asset)
-    text = text.replace('File(dir, "bitchord-${info.version}.apk")', 'File(dir, "pexpo-${info.version}.apk")')
+    text = text.replace('File(dir, "pexpo-${info.version}.apk")', 'File(dir, "pexpo-${info.version}.apk")')
 
     helper = '''
     /**
@@ -265,7 +265,7 @@ def patch_updater() -> None:
 
 
 def patch_viewmodel_update_call() -> None:
-    path = ROOT / 'app/src/main/java/com/music/bitchord/ui/MainViewModel.kt'
+    path = ROOT / 'app/src/main/java/com/music/pexpo/ui/MainViewModel.kt'
     text = path.read_text(encoding='utf-8')
     text = text.replace('AppUpdateChecker.check()','AppUpdateChecker.check(getApplication())')
     path.write_text(text, encoding='utf-8')

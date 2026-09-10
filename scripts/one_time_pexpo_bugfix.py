@@ -14,7 +14,7 @@ def replace_once(path: str, old: str, new: str, label: str) -> None:
 
 # Bug #1 — refresh the persisted session and immediately refetch missing
 # YouTube profile/channel thumbnails while the account selector is open.
-p = Path("app/src/main/java/com/music/bitchord/ui/MainViewModel.kt")
+p = Path("app/src/main/java/com/music/pexpo/ui/MainViewModel.kt")
 s = p.read_text()
 old = """    fun refreshGoogleAccounts() {
         _googleAccounts.value = authStore.sessions
@@ -42,7 +42,7 @@ if "loadChannels(force = true)" not in s:
 # Bug #2 — transport is not the same thing as meteredness. Android explicitly
 # allows Wi-Fi to be metered, so the display must use NetworkCapabilities
 # transport while AppSettings.meteredConnection remains the billing signal.
-p = Path("app/src/main/java/com/music/bitchord/ui/screens/SettingsSheet.kt")
+p = Path("app/src/main/java/com/music/pexpo/ui/screens/SettingsSheet.kt")
 s = p.read_text()
 if "import androidx.compose.runtime.DisposableEffect" not in s:
     replace_once(
@@ -95,7 +95,7 @@ if "takeIf { onCellular }" not in s:
 
 # Legacy gate — current 1.5.1.4 is the minimum and is never blocked. The
 # existing Pexpo version ordering puts 1.5.1.4 between 1.5.4 and 1.5.5.
-p = Path("app/src/main/java/com/music/bitchord/BitChordApplication.kt")
+p = Path("app/src/main/java/com/music/pexpo/PexpoApplication.kt")
 s = p.read_text()
 if "Pexpo update required" not in s:
     if "import android.app.Activity\n" not in s:
