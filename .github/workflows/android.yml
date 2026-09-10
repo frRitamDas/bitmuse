@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -46,7 +47,7 @@ jobs:
         path: app/build/outputs/apk/dev/debug/*.apk
 
   build-prod-release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Repository
@@ -71,7 +72,7 @@ jobs:
         printf 'LASTFM_SECRET=%s\n' "$LASTFM_SECRET" >> local.properties
     - name: Apply Pexpo 1.5.5 maintenance patch
       run: python3 scripts/patch_155.py
-    - name: Setup release signing
+    - name: Setup permanent release signing
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -79,41 +80,33 @@ jobs:
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
         set -euo pipefail
-        valid_keystore=false
-        if [ -n "$KEYSTORE_BASE64" ]; then
-          if printf '%s' "$KEYSTORE_BASE64" | base64 --decode > pexpo-release.jks 2>/dev/null; then
-            if [ -s pexpo-release.jks ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
-              if keytool -list -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1 && \
-                 keytool -list -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
-                valid_keystore=true
-              fi
-            fi
+        for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+          if [ -z "${!name}" ]; then
+            echo "Missing required Actions secret: $name" >&2
+            echo 'Configure the four permanent Pexpo signing secrets before running a production release.' >&2
+            exit 1
           fi
+        done
+        printf '%s' "$KEYSTORE_BASE64" | base64 --decode > pexpo-release.jks
+        if [ ! -s pexpo-release.jks ]; then
+          echo 'KEYSTORE_BASE64 decoded to an empty keystore.' >&2
+          exit 1
         fi
-        if [ "$valid_keystore" = true ]; then
-          echo 'Using configured Pexpo release keystore.'
-          {
-            echo 'storeFile=pexpo-release.jks'
-            printf 'storePassword=%s\n' "$KEYSTORE_PASSWORD"
-            printf 'keyAlias=%s\n' "$KEY_ALIAS"
-            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
-          } > keystore.properties
-        else
-          echo 'Configured release keystore unavailable; using temporary CI signing key for this build.'
-          rm -f pexpo-release.jks
-          CI_STORE_PASSWORD="$(openssl rand -hex 32)"
-          keytool -genkeypair -v -storetype JKS \
-            -keystore pexpo-release.jks \
-            -alias pexpo-ci -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass "$CI_STORE_PASSWORD" -keypass "$CI_STORE_PASSWORD" \
-            -dname 'CN=Pexpo CI, O=Pexpo, C=IN' >/dev/null
-          {
-            echo 'storeFile=pexpo-release.jks'
-            printf 'storePassword=%s\n' "$CI_STORE_PASSWORD"
-            echo 'keyAlias=pexpo-ci'
-            printf 'keyPassword=%s\n' "$CI_STORE_PASSWORD"
-          } > keystore.properties
+        if ! keytool -list -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
+          echo 'Permanent Pexpo keystore validation failed: invalid keystore or password.' >&2
+          exit 1
         fi
+        if ! keytool -list -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
+          echo 'Permanent Pexpo keystore validation failed: KEY_ALIAS was not found.' >&2
+          exit 1
+        fi
+        {
+          echo 'storeFile=pexpo-release.jks'
+          printf 'storePassword=%s\n' "$KEYSTORE_PASSWORD"
+          printf 'keyAlias=%s\n' "$KEY_ALIAS"
+          printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+        } > keystore.properties
+        echo 'Permanent Pexpo release keystore validated and selected.'
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Build Pexpo v1.5.5
@@ -150,6 +143,7 @@ jobs:
         - Production builds now require configured Last.fm API credentials, fixing Last.fm login builds that silently shipped without credentials.
         - Fixed Canvas network gating so Wi-Fi always permits animated covers while the cellular preference only applies on cellular transport.
         - Renamed the BitChord source/package identity to Pexpo without changing unrelated application behavior.
+        - Production APKs are signed only with the configured permanent Pexpo release keystore.
 
         ### Downloads
         Universal, arm64-v8a, armeabi-v7a and x86_64 APKs are attached, with SHA-256 checksums.
@@ -182,7 +176,7 @@ jobs:
         set -euo pipefail
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add app/src app/build.gradle.kts scripts .github README.md
+        git add app/src app/build.gradle.kts scripts README.md
         if git diff --cached --quiet; then echo 'Source already finalized.'; exit 0; fi
         git commit -m 'fix: finalize Pexpo 1.5.5 maintenance patches'
         git push origin main
