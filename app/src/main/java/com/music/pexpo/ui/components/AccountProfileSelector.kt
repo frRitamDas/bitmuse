@@ -51,71 +51,158 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
-fun AccountProfileSelector(accounts: List<GoogleAccountSession>, activeAccountId: String?, activeProfileId: String?, hazeState: HazeState,
-    onSelect: (GoogleAccountSession, YouTubeProfile) -> Unit, onAddAccount: () -> Unit,
-    onRemoveAccount: (GoogleAccountSession) -> Unit, onOpenSettings: () -> Unit, onDismiss: () -> Unit,
-    modifier: Modifier = Modifier) {
+fun AccountProfileSelector(
+    accounts: List<GoogleAccountSession>,
+    activeAccountId: String?,
+    activeProfileId: String?,
+    hazeState: HazeState,
+    onSelect: (GoogleAccountSession, YouTubeProfile) -> Unit,
+    onAddAccount: () -> Unit,
+    onRemoveAccount: (GoogleAccountSession) -> Unit,
+    onOpenSettings: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var managing by remember { mutableStateOf(false) }
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
-    val canAddAccount = accounts.isEmpty()
     val shape = MaterialTheme.shapes.extraLarge
-    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = .48f)).clickable(onClick = onDismiss), horizontalAlignment = Alignment.CenterHorizontally) {
-        Surface(color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface, shape = shape,
-            modifier = Modifier.padding(top = 56.dp, start = 20.dp, end = 20.dp).fillMaxWidth().clip(shape)
-                .then(if (reduceDynamicBlur) Modifier.background(MaterialTheme.colorScheme.surface)
-                else Modifier.optimizedHazeEffect(state = hazeState, style = HazeMaterials.thin(MaterialTheme.colorScheme.surface)))
-                .clickable(onClick = {})) {
+
+    Column(
+        modifier.fillMaxSize()
+            .background(MaterialTheme.colorScheme.scrim.copy(alpha = .48f))
+            .clickable(onClick = onDismiss),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Surface(
+            color = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            shape = shape,
+            modifier = Modifier.padding(top = 56.dp, start = 20.dp, end = 20.dp)
+                .fillMaxWidth().clip(shape)
+                .then(
+                    if (reduceDynamicBlur) Modifier.background(MaterialTheme.colorScheme.surface)
+                    else Modifier.optimizedHazeEffect(
+                        state = hazeState,
+                        style = HazeMaterials.thin(MaterialTheme.colorScheme.surface),
+                    ),
+                )
+                .clickable(onClick = {}),
+        ) {
             LazyColumn {
-                item { Text(stringResource(R.string.switch_account), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(20.dp, 18.dp, 20.dp, 8.dp)) }
+                item {
+                    Text(
+                        stringResource(R.string.switch_account),
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(20.dp, 18.dp, 20.dp, 8.dp),
+                    )
+                }
                 accounts.forEach { account ->
-                    item { Text(account.email.ifBlank { account.name.ifBlank { stringResource(R.string.accounts) } }, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp, 12.dp, 20.dp, 4.dp)) }
+                    item {
+                        Text(
+                            account.email.ifBlank {
+                                account.name.ifBlank { stringResource(R.string.accounts) }
+                            },
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(20.dp, 12.dp, 20.dp, 4.dp),
+                        )
+                    }
                     items(account.profiles.size) { index ->
                         val profile = account.profiles[index]
-                        ProfileRow(profile, account.accountId == activeAccountId && profile.profileId == activeProfileId, managing,
-                            { onSelect(account, profile); onDismiss() }, { onRemoveAccount(account) })
+                        ProfileRow(
+                            profile = profile,
+                            selected = account.accountId == activeAccountId && profile.profileId == activeProfileId,
+                            managing = managing,
+                            onClick = { onSelect(account, profile); onDismiss() },
+                            onRemove = { onRemoveAccount(account) },
+                        )
                     }
                 }
-                item { DisabledAwareSelectorAction(Icons.Rounded.Add, stringResource(R.string.add_account), stringResource(R.string.single_account_limit), canAddAccount, onAddAccount) }
-                item { SelectorAction(Icons.Rounded.ManageAccounts, stringResource(R.string.manage_accounts)) { managing = !managing } }
-                item { SelectorAction(Icons.Rounded.Settings, stringResource(R.string.settings), onOpenSettings) }
+                item {
+                    SelectorAction(
+                        Icons.Rounded.Add,
+                        stringResource(R.string.add_account),
+                        onAddAccount,
+                    )
+                }
+                item {
+                    SelectorAction(Icons.Rounded.ManageAccounts, stringResource(R.string.manage_accounts)) {
+                        managing = !managing
+                    }
+                }
+                item {
+                    SelectorAction(Icons.Rounded.Settings, stringResource(R.string.settings), onOpenSettings)
+                }
             }
         }
     }
 }
 
-@Composable private fun ProfileRow(profile: YouTubeProfile, selected: Boolean, managing: Boolean, onClick: () -> Unit, onRemove: () -> Unit) {
+@Composable
+private fun ProfileRow(
+    profile: YouTubeProfile,
+    selected: Boolean,
+    managing: Boolean,
+    onClick: () -> Unit,
+    onRemove: () -> Unit,
+) {
     val description = stringResource(if (selected) R.string.selected_account else R.string.switch_account)
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(role = Role.RadioButton, onClick = if (managing) onRemove else onClick).semantics { contentDescription = description }.padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp)
+            .clickable(role = Role.RadioButton, onClick = if (managing) onRemove else onClick)
+            .semantics { contentDescription = description }
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         ProfileAvatar(profile)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(profile.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(profile.handle.ifBlank { stringResource(if (profile.isBrandAccount) R.string.brand_account else R.string.personal) }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                profile.handle.ifBlank {
+                    stringResource(if (profile.isBrandAccount) R.string.brand_account else R.string.personal)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-        if (selected && !managing) Icon(Icons.Rounded.Check, stringResource(R.string.selected_account), tint = MaterialTheme.colorScheme.primary)
+        if (selected && !managing) {
+            Icon(Icons.Rounded.Check, stringResource(R.string.selected_account), tint = MaterialTheme.colorScheme.primary)
+        }
         if (managing) Text(stringResource(R.string.sign_out), color = MaterialTheme.colorScheme.error)
     }
 }
 
-@Composable private fun ProfileAvatar(profile: YouTubeProfile) {
+@Composable
+private fun ProfileAvatar(profile: YouTubeProfile) {
     val model = profile.avatar?.trim()?.takeIf { it.isNotEmpty() }
-    if (model != null) AsyncImage(model = model, contentDescription = profile.name, modifier = Modifier.size(38.dp).clip(CircleShape))
-    else Box(Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Person, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-}
-
-@Composable private fun SelectorAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = label }.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null); Spacer(Modifier.width(16.dp)); Text(label)
+    if (model != null) {
+        AsyncImage(model = model, contentDescription = profile.name, modifier = Modifier.size(38.dp).clip(CircleShape))
+    } else {
+        Box(
+            Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Rounded.Person, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
-@Composable private fun DisabledAwareSelectorAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, disabledLabel: String, enabled: Boolean, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(role = Role.Button, enabled = enabled, onClick = onClick).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else .25f))
+@Composable
+private fun SelectorAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label }
+            .padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null)
         Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            Text(label, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else .28f))
-            if (!enabled) Text(disabledLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .7f))
-        }
+        Text(label)
     }
 }

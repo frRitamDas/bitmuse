@@ -34,8 +34,10 @@ jobs:
       run: |
         printf 'LASTFM_API_KEY=%s\n' "$LASTFM_API_KEY" > local.properties
         printf 'LASTFM_SECRET=%s\n' "$LASTFM_SECRET" >> local.properties
-    - name: Apply maintenance patch
-      run: python3 scripts/patch_155.py
+    - name: Apply Pexpo maintenance patches
+      run: |
+        python3 scripts/patch_155.py
+        python3 scripts/patch_156.py
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - name: Build Dev Debug APK
@@ -70,8 +72,10 @@ jobs:
         fi
         printf 'LASTFM_API_KEY=%s\n' "$LASTFM_API_KEY" > local.properties
         printf 'LASTFM_SECRET=%s\n' "$LASTFM_SECRET" >> local.properties
-    - name: Apply Pexpo 1.5.5 maintenance patch
-      run: python3 scripts/patch_155.py
+    - name: Apply Pexpo 1.5.6 maintenance patches
+      run: |
+        python3 scripts/patch_155.py
+        python3 scripts/patch_156.py
     - name: Setup permanent release signing
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -83,23 +87,13 @@ jobs:
         for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
           if [ -z "${!name}" ]; then
             echo "Missing required Actions secret: $name" >&2
-            echo 'Configure the four permanent Pexpo signing secrets before running a production release.' >&2
             exit 1
           fi
         done
         printf '%s' "$KEYSTORE_BASE64" | base64 --decode > pexpo-release.jks
-        if [ ! -s pexpo-release.jks ]; then
-          echo 'KEYSTORE_BASE64 decoded to an empty keystore.' >&2
-          exit 1
-        fi
-        if ! keytool -list -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
-          echo 'Permanent Pexpo keystore validation failed: invalid keystore or password.' >&2
-          exit 1
-        fi
-        if ! keytool -list -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
-          echo 'Permanent Pexpo keystore validation failed: KEY_ALIAS was not found.' >&2
-          exit 1
-        fi
+        [ -s pexpo-release.jks ]
+        keytool -list -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" >/dev/null
+        keytool -list -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
         {
           echo 'storeFile=pexpo-release.jks'
           printf 'storePassword=%s\n' "$KEYSTORE_PASSWORD"
@@ -109,7 +103,7 @@ jobs:
         echo 'Permanent Pexpo release keystore validated and selected.'
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-    - name: Build Pexpo v1.5.5
+    - name: Build Pexpo v1.5.6
       run: ./gradlew assembleProdRelease --stacktrace
     - name: Verify Pexpo release identity
       run: |
@@ -117,68 +111,91 @@ jobs:
         APK=app/build/outputs/apk/prod/release/app-prod-universal-release.apk
         [ -s "$APK" ]
         AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
-        [ -n "$AAPT" ]
         BADGING=$("$AAPT" dump badging "$APK")
         echo "$BADGING" | grep -F "package: name='com.music.pexpo'" >/dev/null
-        echo "$BADGING" | grep -F "versionName='1.5.5'" >/dev/null
-        echo 'Verified production APK identity: com.music.pexpo v1.5.5'
+        echo "$BADGING" | grep -F "versionCode='20'" >/dev/null
+        echo "$BADGING" | grep -F "versionName='1.5.6'" >/dev/null
+        echo 'Verified production APK identity: com.music.pexpo v1.5.6 (versionCode 20)'
+    - name: Verify release is signed with the permanent Pexpo certificate
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      run: |
+        set -euo pipefail
+        APK=app/build/outputs/apk/prod/release/app-prod-universal-release.apk
+        keytool -list -v -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > expected-cert.txt
+        apksigner verify --verbose --print-certs "$APK" > apk-cert.txt
+        EXPECTED=$(grep -m1 'SHA-256 certificate fingerprint:' expected-cert.txt | sed 's/.*: //')
+        ACTUAL=$(grep -m1 'Signer #1 certificate SHA-256 digest:' apk-cert.txt | sed 's/.*: //')
+        [ -n "$EXPECTED" ] && [ -n "$ACTUAL" ]
+        [ "${EXPECTED//:/}" = "${ACTUAL//:/}" ]
+        echo 'Verified APK certificate matches the permanent Pexpo release keystore.'
     - name: Prepare release assets
       run: |
         set -euo pipefail
         mkdir -p release-assets
-        cp app/build/outputs/apk/prod/release/app-prod-universal-release.apk release-assets/pexpo-1.5.5-universal.apk
-        cp app/build/outputs/apk/prod/release/app-prod-arm64-v8a-release.apk release-assets/pexpo-1.5.5-arm64-v8a.apk
-        cp app/build/outputs/apk/prod/release/app-prod-armeabi-v7a-release.apk release-assets/pexpo-1.5.5-armeabi-v7a.apk
-        cp app/build/outputs/apk/prod/release/app-prod-x86_64-release.apk release-assets/pexpo-1.5.5-x86_64.apk
+        cp app/build/outputs/apk/prod/release/app-prod-universal-release.apk release-assets/pexpo-1.5.6-universal.apk
+        cp app/build/outputs/apk/prod/release/app-prod-arm64-v8a-release.apk release-assets/pexpo-1.5.6-arm64-v8a.apk
+        cp app/build/outputs/apk/prod/release/app-prod-armeabi-v7a-release.apk release-assets/pexpo-1.5.6-armeabi-v7a.apk
+        cp app/build/outputs/apk/prod/release/app-prod-x86_64-release.apk release-assets/pexpo-1.5.6-x86_64.apk
         sha256sum release-assets/*.apk > release-assets/SHA256SUMS.txt
-    - name: Upload Pexpo 1.5.5 artifact
+    - name: Upload Pexpo 1.5.6 artifact
       uses: actions/upload-artifact@v4
       with:
-        name: pexpo-v1.5.5-release
+        name: pexpo-v1.5.6-release
         path: release-assets/*
-    - name: Publish GitHub Release v1.5.5
+    - name: Publish GitHub Release v1.5.6
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         NOTES=$(cat <<'EOF'
-        Pexpo Music v1.5.5
+        Pexpo Music v1.5.6
 
-        ### What's changed
-        - Fixed account-button routing: signed-out users now go to Settings instead of seeing an empty account selector.
-        - Signed-in users continue to get the account/profile selector from the Home account button.
-        - Settings > Account & integrations > Listen as now opens the same account/profile selector used on Home.
-        - Preserved immediate first-login account/avatar refresh behavior.
-        - Removed the temporary legacy-version shutdown gate; older Pexpo versions remain usable.
-        - Preserved the normal optional update flow with Install now / Later.
-        - Production builds now require configured Last.fm API credentials, fixing Last.fm login builds that silently shipped without credentials.
-        - Fixed Canvas network gating so Wi-Fi always permits animated covers while the cellular preference only applies on cellular transport.
-        - Renamed the BitChord source/package identity to Pexpo without changing unrelated application behavior.
-        - Production APKs are signed only with the configured permanent Pexpo release keystore.
+        ## ✨ What's new
+        
+        ### 👥 Multiple Google Accounts
+        - Add and keep multiple independent Google / YouTube Music sessions in Pexpo.
+        - Use **Add account** to sign in to another Google account without replacing the existing session.
+        - Switch instantly between saved accounts and their Personal / Brand profiles.
+        - Each account keeps its own authenticated session and profile state.
+        - Manage and remove accounts directly from the account selector.
 
-        ### Downloads
-        Universal, arm64-v8a, armeabi-v7a and x86_64 APKs are attached, with SHA-256 checksums.
+        ### 📴 A smoother offline Home
+        - When Pexpo has no active network, Home now reuses its existing polished skeleton cards instead of abruptly showing a full **No Internet Connection** error state.
+        - The existing Pexpo skeleton design is reused; no duplicate loading UI was introduced.
+        - Normal network errors still retain the existing retry message when a connection is available.
+
+        ### 🔐 Production & updates
+        - Version **1.5.6** uses the same permanent Pexpo release signing identity as 1.5.5, preserving the Android upgrade path.
+        - Production package remains `com.music.pexpo`.
+        - Added CI verification for package identity, version code/name, and permanent release certificate.
+        - Universal, arm64-v8a, armeabi-v7a and x86_64 APKs are provided with SHA-256 checksums.
+
+        ## 🚀 Upgrade
+        
+        Pexpo 1.5.6 is a focused release: multi-account support and a more graceful offline Home experience, with the stable 1.5.5 production behavior preserved.
         EOF
         )
-        if gh release view v1.5.5 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-          gh release edit v1.5.5 --repo "$GITHUB_REPOSITORY" --title 'Pexpo Music v1.5.5' --notes "$NOTES"
+        if gh release view v1.5.6 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          gh release edit v1.5.6 --repo "$GITHUB_REPOSITORY" --title 'Pexpo Music v1.5.6' --notes "$NOTES"
         else
-          gh release create v1.5.5 --repo "$GITHUB_REPOSITORY" --target main --title 'Pexpo Music v1.5.5' --notes "$NOTES"
+          gh release create v1.5.6 --repo "$GITHUB_REPOSITORY" --target main --title 'Pexpo Music v1.5.6' --notes "$NOTES"
         fi
-        gh release upload v1.5.5 \
+        gh release upload v1.5.6 \
           --repo "$GITHUB_REPOSITORY" \
           --clobber \
-          release-assets/pexpo-1.5.5-universal.apk \
-          release-assets/pexpo-1.5.5-arm64-v8a.apk \
-          release-assets/pexpo-1.5.5-armeabi-v7a.apk \
-          release-assets/pexpo-1.5.5-x86_64.apk \
+          release-assets/pexpo-1.5.6-universal.apk \
+          release-assets/pexpo-1.5.6-arm64-v8a.apk \
+          release-assets/pexpo-1.5.6-armeabi-v7a.apk \
+          release-assets/pexpo-1.5.6-x86_64.apk \
           release-assets/SHA256SUMS.txt
     - name: Remove superseded Actions artifacts
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
-        gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts[] | select(.name != "pexpo-v1.5.5-release") | .id' | while read -r id; do
+        gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts[] | select(.name != "pexpo-v1.5.6-release") | .id' | while read -r id; do
           [ -z "$id" ] || gh api -X DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}" || true
         done
     - name: Finalize patched source
@@ -189,5 +206,5 @@ jobs:
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add app/src app/build.gradle.kts scripts README.md
         if git diff --cached --quiet; then echo 'Source already finalized.'; exit 0; fi
-        git commit -m 'fix: finalize Pexpo 1.5.5 maintenance patches'
+        git commit -m 'fix: finalize Pexpo 1.5.6 release patches'
         git push origin main
