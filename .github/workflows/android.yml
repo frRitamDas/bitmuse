@@ -124,7 +124,14 @@ jobs:
         set -euo pipefail
         APK=app/build/outputs/apk/prod/release/app-prod-universal-release.apk
         keytool -list -v -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > expected-cert.txt
-        apksigner verify --verbose --print-certs "$APK" > apk-cert.txt
+        APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+        if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
+          echo 'Unable to locate executable apksigner in the Android SDK build-tools.' >&2
+          find "$ANDROID_HOME/build-tools" -type f -name apksigner -print >&2 || true
+          exit 1
+        fi
+        echo "Using apksigner: $APKSIGNER"
+        "$APKSIGNER" verify --verbose --print-certs "$APK" > apk-cert.txt
         EXPECTED=$(grep -m1 '^ *SHA256:' expected-cert.txt | sed 's/.*SHA256: *//')
         ACTUAL=$(grep -m1 'Signer #1 certificate SHA-256 digest:' apk-cert.txt | sed 's/.*: *//')
         [ -n "$EXPECTED" ] && [ -n "$ACTUAL" ]
