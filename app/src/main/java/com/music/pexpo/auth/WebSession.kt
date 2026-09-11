@@ -9,91 +9,86 @@ enum class WebSessionMode {
     /** No usable session yet: sign in to Google. */
     SIGN_IN,
 
-    /**
-     * Already signed in, but on the wrong channel. Opens YouTube Music itself
-     * so its own Accounts switcher can be used, and takes the session from
-     * whatever page the listener ends up on.
-     */
+    /** Already signed in; open YouTube Music for channel switching. */
     SWITCH_CHANNEL,
 }
 
 /** A session lifted out of the in-app browser. */
 data class CapturedSession(
     val cookie: String,
-    /** `DELEGATED_SESSION_ID` — set only while a brand channel is selected. */
     val pageId: String?,
-    /** `DATASYNC_ID`, account half only. */
     val dataSyncId: String?,
-    /** `SESSION_INDEX` — which Google account in the cookie jar. */
     val authUser: String?,
     val visitorData: String?,
     val clientVersion: String?,
-    /** Whether the page reported itself signed in at all. */
     val loggedIn: Boolean,
 )
 
 /**
- * The WebView's own cookie jar, which is not Pexpo's persisted account store.
- *
- * Google authentication is the only state cleared here. Pexpo's durable
- * multi-account sessions remain in AuthStore, so Add Account can replace the
- * temporary browser identity without deleting any stored Pexpo account.
+ * Temporary Google/YouTube authentication state used by the WebView.
+ * Durable Pexpo multi-account sessions remain in AuthStore.
  */
 object BrowserSession {
-
     /**
-     * Clears Google/YouTube cookies and invokes [onComplete] only after every
-     * asynchronous cookie-expiration operation has completed and the jar has
-     * been flushed.
+     * Expire Google/YouTube cookies before a fresh login and invoke the callback
+     * only after every asynchronous mutation has completed and Chromium has
+     * been flushed. Cookie deletion is domain/path sensitive, so both discovered
+     * cookies and Google's common identity-cookie names are expired over the
+     * common authentication paths and host/parent domains.
      *
-     * The previous implementation started navigation immediately after
-     * `setCookie()`. Cookie writes are asynchronous, so Google could process
-     * the login URL while the previous account was still present and redirect
-     * directly to YouTube Music. Waiting for all callbacks removes that race.
-     *
-     * We intentionally do not call `removeAllCookies()`: the WebView cookie jar
-     * is shared and clearing it wholesale would also affect Discord/Last.fm.
+     * removeAllCookies() is deliberately not used because other in-app web
+     * integrations can share the WebView cookie store.
      */
     fun clearGoogleCookies(onComplete: () -> Unit = {}) {
         val manager = runCatching { CookieManager.getInstance() }.getOrElse {
-            Log.w("Pexpo", "no cookie manager to clear: ${it.message}")
+            Log.w(TAG, "unable to obtain WebView CookieManager: ${it.message}")
             onComplete()
             return
         }
 
-        val expirations = buildList {
-            GOOGLE_ORIGINS.forEach { origin ->
-                val jar = manager.getCookie(origin) ?: return@forEach
-                val host = origin.removePrefix("https://").substringBefore('/')
-                val parent = host.substringAfter('.', "").takeIf { it.contains('.') }
-                jar.split(';').forEach { entry ->
-                    val name = entry.substringBefore('=').trim()
-                    if (name.isEmpty()) return@forEach
-                    add(origin to "$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/")
-                    add(origin to "$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Domain=$host")
+        val mutations = LinkedHashSet<String>()
+        GOOGLE_ORIGINS.forEach { origin ->
+            val host = origin.removePrefix("https://").substringBefore('/')
+            val parent = host.substringAfter('.', "").takeIf { it.contains('.') }
+            val discovered = manager.getCookie(origin).orEmpty()
+                .split(';')
+                .map { it.substringBefore('=').trim() }
+                .filter { it.isNotEmpty() }
+
+            (discovered + GOOGLE_AUTH_COOKIE_NAMES).distinct().forEach { name ->
+                GOOGLE_PATHS.forEach { path ->
+                    mutations += "$origin|$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=$path"
+                    mutations += "$origin|$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=$path; Domain=$host"
                     if (parent != null) {
-                        add(origin to "$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Domain=.$parent")
+                        mutations += "$origin|$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=$path; Domain=.$parent"
                     }
                 }
             }
         }
 
-        if (expirations.isEmpty()) {
+        if (mutations.isEmpty()) {
             runCatching { manager.flush() }
             onComplete()
             return
         }
 
-        val remaining = AtomicInteger(expirations.size)
-        expirations.forEach { (origin, cookie) ->
+        val remaining = AtomicInteger(mutations.size)
+        mutations.forEach { mutation ->
+            val origin = mutation.substringBefore('|')
+            val cookie = mutation.substringAfter('|')
             manager.setCookie(origin, cookie) {
                 if (remaining.decrementAndGet() == 0) {
                     runCatching { manager.flush() }
-                    onComplete()
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        runCatching { manager.flush() }
+                        onComplete()
+                    }
                 }
             }
         }
     }
+
+    private const val TAG = "Pexpo"
 
     private val GOOGLE_ORIGINS = listOf(
         "https://music.youtube.com",
@@ -102,5 +97,17 @@ object BrowserSession {
         "https://accounts.google.com",
         "https://www.google.com",
         "https://google.com",
+    )
+
+    private val GOOGLE_AUTH_COOKIE_NAMES = setOf(
+        "SID", "SSID", "APISID", "SAPISID", "HSID", "LSID", "OSID",
+        "__Secure-1PSID", "__Secure-3PSID", "__Secure-1PAPISID", "__Secure-3PAPISID",
+        "__Secure-1PSIDTS", "__Secure-3PSIDTS", "__Secure-1PSIDCC", "__Secure-3PSIDCC",
+        "__Secure-YEC", "__Host-GAPS", "GAPS", "AEC", "SOCS", "SIDCC",
+        "LOGIN_INFO", "PREF", "YSC", "VISITOR_INFO1_LIVE",
+    )
+
+    private val GOOGLE_PATHS = listOf(
+        "/", "/ServiceLogin", "/ServiceLoginAuth", "/signin", "/accounts", "/youtubei/v1",
     )
 }
