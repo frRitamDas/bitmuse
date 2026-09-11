@@ -1,11 +1,30 @@
 package com.music.pexpo.auth
 
+import android.annotation.SuppressLint
 import android.webkit.CookieManager
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
 import com.music.pexpo.data.DebugLog as Log
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 
 /** What the in-app browser is being opened for. */
 enum class WebSessionMode {
-    /** No usable session yet: sign in to Google. */
+    /** No usable Pexpo session yet: start a completely fresh Google sign-in. */
     SIGN_IN,
 
     /**
@@ -16,20 +35,7 @@ enum class WebSessionMode {
     SWITCH_CHANNEL,
 }
 
-/**
- * A session lifted out of the in-app browser: the cookie, plus who the page
- * being looked at says it is.
- *
- * The identity fields come from the live page's `ytcfg` rather than from a
- * later server-side fetch of the shell, and that is the entire point. Which
- * channel YouTube Music serves by default is not a question this app gets to
- * answer, but which channel the page in front of the listener is *currently*
- * showing is not a question at all — it is written down in the page. Reading
- * it there is what lets "switch to the channel I want, then save" work.
- *
- * All identity fields are nullable: a page that will not give them up leaves
- * the app exactly where it was before, scraping the shell for its best guess.
- */
+/** A session lifted out of the in-app browser. */
 data class CapturedSession(
     val cookie: String,
     /** `DELEGATED_SESSION_ID` — set only while a brand channel is selected. */
@@ -40,59 +46,77 @@ data class CapturedSession(
     val authUser: String?,
     val visitorData: String?,
     val clientVersion: String?,
-    /** Whether the page reported itself signed in at all. */
+    /** Whether the page reported signed in. */
     val loggedIn: Boolean,
 )
 
 /**
- * The WebView's own cookie jar, which is not the app's.
+ * Controls the WebView's temporary Google cookie state.
  *
- * These are separate stores and the difference is invisible until it bites:
- * signing out of Pexpo forgets the cookie the app makes requests with, and
- * leaves the browser's copy untouched. The next sign-in then loads
- * accounts.google.com, is recognised immediately, redirects straight through
- * to music.youtube.com and hands back a cookie for the account that was just
- * signed out of — a sign-in screen that cannot be used to sign in as anyone
- * else, and shows barely a flicker while refusing to.
+ * Pexpo's durable multi-account sessions live in [AuthStore]. This browser jar
+ * is only an authentication surface. In particular, clearing it for Add
+ * Account must never remove an account already stored by Pexpo.
  */
 object BrowserSession {
 
     /**
-     * Forgets the Google login the in-app browser is holding.
+     * Clears Google/YouTube cookies and invokes [onComplete] only after every
+     * asynchronous cookie-expiration operation has completed and the jar has
+     * been flushed.
      *
-     * Google's cookies only, by name, rather than [CookieManager.removeAllCookies]:
-     * the same jar holds the Discord and Last.fm logins from their own in-app
-     * browsers, and signing out of YouTube Music is not a reason to sign out of
-     * those. There is no per-domain removal in the API, so each cookie is
-     * overwritten with an expired one of the same name.
+     * The previous implementation called `setCookie()` and immediately
+     * navigated to Google. `setCookie()` is asynchronous, so the old Google
+     * session could still be present when Google processed the navigation and
+     * redirected straight back to YouTube Music. That race is the main cause of
+     * the reported "signed out but Home Sign in opens YouTube Music" bug.
+     *
+     * We deliberately do not call `removeAllCookies()`, because the WebView
+     * cookie jar is shared and Pexpo must not sign the user out of Discord or
+     * Last.fm when refreshing only Google authentication.
      */
-    fun clearGoogleCookies() {
-        // Best effort throughout. CookieManager needs a WebView provider, and
-        // on a device that is mid-update or has none there isn't one — which is
-        // a reason for the next sign-in to be less convenient, not a reason for
-        // signing out to crash.
+    fun clearGoogleCookies(onComplete: () -> Unit = {}) {
         val manager = runCatching { CookieManager.getInstance() }.getOrElse {
             Log.w("Pexpo", "no cookie manager to clear: ${it.message}")
+            onComplete()
             return
         }
-        var cleared = 0
-        GOOGLE_ORIGINS.forEach { origin ->
-            val jar = manager.getCookie(origin) ?: return@forEach
-            val host = origin.substringAfter("://")
-            jar.split(';').forEach { entry ->
-                val name = entry.substringBefore('=').trim()
-                if (name.isEmpty()) return@forEach
-                // Both the host-only and the domain-wide form: a cookie set on
-                // `.google.com` is not removed by expiring it on the host, and
-                // which of the two a given cookie used is not recorded here.
-                manager.setCookie(origin, "$name=; Max-Age=0; Path=/")
-                manager.setCookie(origin, "$name=; Max-Age=0; Path=/; Domain=$host")
-                manager.setCookie(origin, "$name=; Max-Age=0; Path=/; Domain=.$host")
-                cleared++
+
+        val expirations = buildList {
+            GOOGLE_ORIGINS.forEach { origin ->
+                val jar = manager.getCookie(origin) ?: return@forEach
+                val host = origin.removePrefix("https://").substringBefore('/')
+                val parent = host.substringAfter('.', "").takeIf { it.contains('.') }
+                jar.split(';').forEach { entry ->
+                    val name = entry.substringBefore('=').trim()
+                    if (name.isEmpty()) return@forEach
+                    // Host-only cookie.
+                    add(origin to "$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/")
+                    // Host-scoped domain form.
+                    add(origin to "$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Domain=$host")
+                    // Parent domain form, e.g. .youtube.com for
+                    // music.youtube.com and .google.com for accounts.google.com.
+                    if (parent != null) {
+                        add(origin to "$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Domain=.$parent")
+                    }
+                }
             }
         }
-        runCatching { manager.flush() }
-        Log.d("Pexpo", "cleared $cleared browser cookies for Google")
+
+        if (expirations.isEmpty()) {
+            runCatching { manager.flush() }
+            onComplete()
+            return
+        }
+
+        val remaining = AtomicInteger(expirations.size)
+        expirations.forEach { (origin, cookie) ->
+            manager.setCookie(origin, cookie) {
+                if (remaining.decrementAndGet() == 0) {
+                    runCatching { manager.flush() }
+                    onComplete()
+                }
+            }
+        }
     }
 
     private val GOOGLE_ORIGINS = listOf(
@@ -104,3 +128,128 @@ object BrowserSession {
         "https://google.com",
     )
 }
+
+/**
+ * In-app Google sign-in for YouTube Music, and the way to change which channel
+ * it listens as.
+ *
+ * SIGN_IN always waits for the Google browser cleanup to finish before the
+ * first navigation. Therefore Home → Sign in and Account → Add account both
+ * begin at Google's real "Sign in to YouTube Music" form instead of reusing a
+ * previous Google account from the WebView.
+ */
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun YtMusicLoginScreen(
+    mode: WebSessionMode,
+    onCaptured: (CapturedSession) -> Unit,
+    modifier: Modifier = Modifier,
+    /** Raise to take the session from the page as it stands. */
+    captureRequest: Int = 0,
+    /** Told when a capture was asked for and there was no session to take. */
+    onCaptureUnavailable: () -> Unit = {},
+) {
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    val currentOnCaptured by rememberUpdatedState(onCaptured)
+    val currentOnUnavailable by rememberUpdatedState(onCaptureUnavailable)
+
+    LaunchedEffect(captureRequest) {
+        if (captureRequest == 0) return@LaunchedEffect
+        val view = webView
+        if (view == null || !captureFrom(view, currentOnCaptured)) currentOnUnavailable()
+    }
+
+    AndroidView(
+        modifier = modifier.fillMaxSize(),
+        factory = { context ->
+            WebView(context).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                webViewClient = object : WebViewClient() {
+                    private var captured = false
+
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        if (mode != WebSessionMode.SIGN_IN) return
+                        if (captured || url?.startsWith(MUSIC_ORIGIN) != true) return
+                        if (view != null && captureFrom(view, currentOnCaptured)) captured = true
+                    }
+                }
+
+                webView = this
+                if (mode == WebSessionMode.SIGN_IN) {
+                    // Critical: don't call loadUrl until the asynchronous
+                    // CookieManager operations have completed.
+                    BrowserSession.clearGoogleCookies {
+                        post {
+                            stopLoading()
+                            clearHistory()
+                            loadUrl(LOGIN_URL)
+                        }
+                    }
+                } else {
+                    loadUrl("$MUSIC_ORIGIN/")
+                }
+            }
+        },
+    )
+}
+
+/** Takes the authenticated session from [view], if one is present. */
+private fun captureFrom(view: WebView, onCaptured: (CapturedSession) -> Unit): Boolean {
+    val cookies = CookieManager.getInstance().getCookie(MUSIC_ORIGIN)
+    if (cookies == null || !AuthStore.hasApiSid(cookies)) return false
+    CookieManager.getInstance().flush()
+
+    view.evaluateJavascript(YTCFG_PROBE) { raw ->
+        val config = raw.parseConfig()
+        if (config == null) {
+            Log.w(TAG, "no ytcfg on the page; falling back to the shell for identity")
+        }
+        onCaptured(
+            CapturedSession(
+                cookie = cookies,
+                dataSyncId = config?.string("dataSyncId")?.substringBefore("||"),
+                pageId = config?.string("pageId"),
+                authUser = config?.string("authUser"),
+                visitorData = config?.string("visitorData"),
+                clientVersion = config?.string("clientVersion"),
+                loggedIn = config?.get("loggedIn").let { it is JsonPrimitive && it.content == "true" },
+            ),
+        )
+    }
+    return true
+}
+
+private const val MUSIC_ORIGIN = "https://music.youtube.com"
+private const val LOGIN_URL = "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true&continue=https%3A%2F%2Fmusic.youtube.com%2F"
+private const val TAG = "Pexpo"
+
+private const val YTCFG_PROBE = """
+(function () {
+  try {
+    if (!window.ytcfg || !window.ytcfg.get) return null;
+    var get = function (key) {
+      var value = window.ytcfg.get(key);
+      return (value === undefined || value === null || value === '') ? null : String(value);
+    };
+    return {
+      loggedIn: String(!!window.ytcfg.get('LOGGED_IN')),
+      pageId: get('DELEGATED_SESSION_ID'),
+      dataSyncId: get('DATASYNC_ID'),
+      authUser: get('SESSION_INDEX'),
+      visitorData: get('VISITOR_DATA'),
+      clientVersion: get('INNERTUBE_CLIENT_VERSION')
+    };
+  } catch (e) {
+    return null;
+  }
+})()
+"""
+
+private val json = Json { ignoreUnknownKeys = true }
+
+private fun String?.parseConfig(): JsonObject? =
+    this?.let { runCatching { json.parseToJsonElement(it).jsonObject }.getOrNull() }
+
+private fun JsonObject.string(key: String): String? =
+    (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
