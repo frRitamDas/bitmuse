@@ -7,10 +7,6 @@ def patch_home_offline_skeleton() -> None:
     path = ROOT / 'app/src/main/java/com/music/pexpo/ui/screens/HomeScreen.kt'
     text = path.read_text(encoding='utf-8')
 
-    # The 1.5.6 Home behavior may already be present on main. The maintenance
-    # script also has to work from an older 1.5.5 checkout, so only insert the
-    # network declarations when both are genuinely absent. Never duplicate
-    # local Compose declarations.
     context_marker = '    val homeContext = androidx.compose.ui.platform.LocalContext.current\n'
     network_marker = '    val networkAvailableForHome = remember {'
     marker = '    PullToRefresh(\n        refreshing = refreshing,'
@@ -60,9 +56,15 @@ def patch_fresh_google_login() -> None:
     path = ROOT / 'app/src/main/java/com/music/pexpo/auth/YtMusicLoginScreen.kt'
     text = path.read_text(encoding='utf-8')
 
-    # A fresh Pexpo login must never request passive authentication. The source
-    # may already contain the stronger logout + storage reset implementation;
-    # in that case this maintenance pass is intentionally a no-op.
+    final_markers = (
+        'freshSessionKey: Int = 0',
+        'key(mode, freshSessionKey)',
+        'WebStorage.getInstance().deleteAllData()',
+        'loadUrl(LOGIN_URL)',
+    )
+    if all(marker in text for marker in final_markers):
+        return
+
     old_url = 'passive=true&continue=https%3A%2F%2Fmusic.youtube.com%2F'
     new_url = 'passive=false&continue=https%3A%2F%2Fmusic.youtube.com%2F'
     if old_url in text:
@@ -70,21 +72,12 @@ def patch_fresh_google_login() -> None:
     elif new_url not in text:
         raise RuntimeError('YtMusicLoginScreen: expected Google login URL not found')
 
-    # Avoid displaying a stale cached YouTube page while a new Google session
-    # is being established. This does not touch the cookie jar.
     marker = '                settings.domStorageEnabled = true\n'
     cache_line = '                settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE\n'
     if cache_line not in text:
         if marker not in text:
             raise RuntimeError('YtMusicLoginScreen: expected WebView settings marker not found')
         text = text.replace(marker, marker + cache_line, 1)
-
-    # New deterministic implementation: cookie cleanup + WebView storage/form
-    # reset + explicit Google logout, with Google's logout redirect landing on
-    # the blank ServiceLogin page. It is already final if these markers exist.
-    if 'GOOGLE_LOGOUT_URL = ' in text and 'WebStorage.getInstance().deleteAllData()' in text:
-        path.write_text(text, encoding='utf-8')
-        return
 
     old_cleanup = '''                    BrowserSession.clearGoogleCookies {
                         post {
@@ -100,7 +93,8 @@ def patch_fresh_google_login() -> None:
                             clearCache(true)
                             clearFormData()
                             runCatching { WebStorage.getInstance().deleteAllData() }
-                            loadUrl(GOOGLE_LOGOUT_URL)
+                            runCatching { CookieManager.getInstance().flush() }
+                            loadUrl(LOGIN_URL)
                         }
                     }'''
     if old_cleanup in text:
@@ -111,7 +105,44 @@ def patch_fresh_google_login() -> None:
     path.write_text(text, encoding='utf-8')
 
 
+def patch_fresh_login_wiring() -> None:
+    state_path = ROOT / 'app/src/main/java/com/music/pexpo/MainActivityStateCompat.kt'
+    state = state_path.read_text(encoding='utf-8')
+    if 'freshGoogleSessionKey' not in state:
+        marker = 'private val webSessionState = mutableStateOf<WebSessionMode?>(null)\n'
+        replacement = marker + '\n/** Increments whenever a new SIGN_IN transaction is opened. */\nvar freshGoogleSessionKey by mutableIntStateOf(0)\n'
+        if marker not in state:
+            raise RuntimeError('MainActivityStateCompat: expected webSession state marker not found')
+        state = state.replace(marker, replacement, 1)
+
+    old_setter = '''    set(value) {
+        webSessionState.value = value
+        if (value == null) {'''
+    new_setter = '''    set(value) {
+        if (value == WebSessionMode.SIGN_IN && webSessionState.value != WebSessionMode.SIGN_IN) {
+            freshGoogleSessionKey++
+        }
+        webSessionState.value = value
+        if (value == null) {'''
+    if old_setter in state:
+        state = state.replace(old_setter, new_setter, 1)
+    elif 'freshGoogleSessionKey++' not in state:
+        raise RuntimeError('MainActivityStateCompat: expected webSession setter not found')
+    state_path.write_text(state, encoding='utf-8')
+
+    activity_path = ROOT / 'app/src/main/java/com/music/pexpo/MainActivity.kt'
+    activity = activity_path.read_text(encoding='utf-8')
+    if 'freshSessionKey = freshGoogleSessionKey' not in activity:
+        marker = '                        captureRequest = captureRequest,\n'
+        replacement = marker + '                        freshSessionKey = freshGoogleSessionKey,\n'
+        if marker not in activity:
+            raise RuntimeError('MainActivity: expected YtMusicLoginScreen captureRequest marker not found')
+        activity = activity.replace(marker, replacement, 1)
+        activity_path.write_text(activity, encoding='utf-8')
+
+
 if __name__ == '__main__':
     patch_home_offline_skeleton()
     patch_fresh_google_login()
-    print('Pexpo 1.5.6 patches applied idempotently: offline Home skeleton + deterministic fresh Google login.')
+    patch_fresh_login_wiring()
+    print('Pexpo 1.5.6 patches applied idempotently: offline Home skeleton + fresh Google authentication transaction.')
