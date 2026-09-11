@@ -4,12 +4,8 @@ import android.webkit.CookieManager
 import com.music.pexpo.data.DebugLog as Log
 import java.util.concurrent.atomic.AtomicInteger
 
-/** What the in-app browser is being opened for. */
 enum class WebSessionMode {
-    /** No usable session yet: sign in to Google. */
     SIGN_IN,
-
-    /** Already signed in; open YouTube Music for channel switching. */
     SWITCH_CHANNEL,
 }
 
@@ -23,14 +19,8 @@ data class CapturedSession(
     val loggedIn: Boolean,
 )
 
-/** Temporary Google/YouTube authentication state used by the WebView. */
 object BrowserSession {
-    /**
-     * Expire Google/YouTube identity cookies before a fresh login. We explicitly
-     * cover the common Google authentication cookie names, every path used by
-     * Google's sign-in endpoints, and both host-only and parent-domain cookies.
-     * The callback is delayed until every Chromium mutation has completed.
-     */
+    /** Expire Google/YouTube identity cookies before a fresh login transaction. */
     fun clearGoogleCookies(onComplete: () -> Unit = {}) {
         val manager = runCatching { CookieManager.getInstance() }.getOrElse {
             Log.w(TAG, "unable to obtain WebView CookieManager: ${it.message}")
@@ -72,7 +62,6 @@ object BrowserSession {
                 if (remaining.decrementAndGet() == 0) {
                     runCatching { manager.flush() }
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        runCatching { manager.removeExpiredCookies() }
                         runCatching { manager.flush() }
                         onComplete()
                     }
