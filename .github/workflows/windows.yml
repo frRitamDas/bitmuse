@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-windows:
@@ -25,22 +25,33 @@ jobs:
           node-version: 22
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
 
-      - name: Build Pexpo Windows installer
+      - name: Build Pexpo 1.1 Windows installer
         run: npm run dist
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
-      - name: Verify installer
+      - name: Verify Pexpo 1.1 installer
         shell: pwsh
         run: |
-          $installer = Get-ChildItem -Path dist -Filter 'Pexpo-1.1-Setup.exe' -File
-          if (-not $installer) { throw 'Pexpo Windows installer was not produced.' }
-          Write-Host "Created $($installer.FullName)"
-          Get-FileHash $installer.FullName -Algorithm SHA256
+          $installer = Join-Path $PWD 'dist\Pexpo-1.1-Setup.exe'
+          if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
+            Write-Host 'Files produced in dist:'
+            Get-ChildItem -Path dist -File | Select-Object Name, Length
+            throw 'Pexpo 1.1 Windows installer was not produced at the expected path.'
+          }
 
-      - name: Upload Windows installer
+          $size = (Get-Item -LiteralPath $installer).Length
+          if ($size -lt 1048576) {
+            throw "Installer is unexpectedly small: $size bytes."
+          }
+
+          Write-Host "Created: $installer"
+          Write-Host "Size: $size bytes"
+          Get-FileHash -LiteralPath $installer -Algorithm SHA256
+
+      - name: Upload Pexpo 1.1 installer
         uses: actions/upload-artifact@v4
         with:
           name: pexpo-windows-1.1
