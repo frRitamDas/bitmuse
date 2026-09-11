@@ -7,7 +7,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win nsis --publish never"
+    "dist": "electron-builder --win nsis --x64 --publish never"
   },
   "build": {
     "appId": "com.music.pexpo.windows",
@@ -16,6 +16,7 @@
     "executableName": "Pexpo",
     "publisherName": "Ritam Das",
     "copyright": "Copyright © Ritam Das",
+    "asar": true,
     "directories": {
       "output": "dist"
     },
@@ -42,7 +43,7 @@
     }
   },
   "devDependencies": {
-    "electron": "^38.1.0",
-    "electron-builder": "^26.0.12"
+    "electron": "38.1.0",
+    "electron-builder": "26.0.12"
   }
 }
