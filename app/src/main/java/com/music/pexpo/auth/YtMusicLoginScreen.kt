@@ -25,7 +25,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 
 private const val MUSIC_ORIGIN = "https://music.youtube.com"
-private const val LOGIN_URL = "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=false&continue=https%3A%2F%2Fmusic.youtube.com%2F"
+private const val LOGIN_URL = "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&uilel=3&passive=false&authuser=-1&continue=https%3A%2F%2Fmusic.youtube.com%2F"
 private const val TAG = "Pexpo"
 
 /**
@@ -85,10 +85,10 @@ fun YtMusicLoginScreen(
 
                     webView = this
                     if (mode == WebSessionMode.SIGN_IN) {
-                        // A fresh Pexpo login must start from a blank Google
-                        // authentication context. Cleanup is asynchronous, so
-                        // navigation cannot begin until it has completed.
-                        // This is used for BOTH Home -> Sign in and Add account.
+                        // A fresh Pexpo login must start from a neutral Google
+                        // authentication transaction, never from the previous
+                        // YouTube session. The WebView is new for every key and
+                        // the cookie/storage cleanup completes before navigation.
                         BrowserSession.clearGoogleCookies {
                             post {
                                 stopLoading()
@@ -97,9 +97,6 @@ fun YtMusicLoginScreen(
                                 clearFormData()
                                 runCatching { WebStorage.getInstance().deleteAllData() }
                                 runCatching { CookieManager.getInstance().flush() }
-                                // Do not route through Google's server-side
-                                // logout endpoint. Open the neutral ServiceLogin
-                                // page directly after local state is cleared.
                                 loadUrl(LOGIN_URL)
                             }
                         }
