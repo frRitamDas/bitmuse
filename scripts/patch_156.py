@@ -60,9 +60,9 @@ def patch_fresh_google_login() -> None:
     path = ROOT / 'app/src/main/java/com/music/pexpo/auth/YtMusicLoginScreen.kt'
     text = path.read_text(encoding='utf-8')
 
-    # A fresh Pexpo login must never request passive authentication. Together
-    # with BrowserSession's completed cookie cleanup, this prevents Google from
-    # silently reusing the account that was just signed out.
+    # A fresh Pexpo login must never request passive authentication. The source
+    # may already contain the stronger logout + storage reset implementation;
+    # in that case this maintenance pass is intentionally a no-op.
     old_url = 'passive=true&continue=https%3A%2F%2Fmusic.youtube.com%2F'
     new_url = 'passive=false&continue=https%3A%2F%2Fmusic.youtube.com%2F'
     if old_url in text:
@@ -79,6 +79,13 @@ def patch_fresh_google_login() -> None:
             raise RuntimeError('YtMusicLoginScreen: expected WebView settings marker not found')
         text = text.replace(marker, marker + cache_line, 1)
 
+    # New deterministic implementation: cookie cleanup + WebView storage/form
+    # reset + explicit Google logout, with Google's logout redirect landing on
+    # the blank ServiceLogin page. It is already final if these markers exist.
+    if 'GOOGLE_LOGOUT_URL = ' in text and 'WebStorage.getInstance().deleteAllData()' in text:
+        path.write_text(text, encoding='utf-8')
+        return
+
     old_cleanup = '''                    BrowserSession.clearGoogleCookies {
                         post {
                             stopLoading()
@@ -91,7 +98,9 @@ def patch_fresh_google_login() -> None:
                             stopLoading()
                             clearHistory()
                             clearCache(true)
-                            loadUrl(LOGIN_URL)
+                            clearFormData()
+                            runCatching { WebStorage.getInstance().deleteAllData() }
+                            loadUrl(GOOGLE_LOGOUT_URL)
                         }
                     }'''
     if old_cleanup in text:
