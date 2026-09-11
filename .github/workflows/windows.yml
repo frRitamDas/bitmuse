@@ -1,4 +1,4 @@
-name: Pexpo Windows
+name: Pexpo Windows 1.1
 
 on:
   push:
@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   build-windows:
+    name: Build Pexpo Windows 1.1 (x64)
     runs-on: windows-latest
     defaults:
       run:
@@ -19,39 +20,71 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Setup Node.js
+      - name: Setup Node.js 22
         uses: actions/setup-node@v5
         with:
           node-version: 22
 
-      - name: Install dependencies
+      - name: Verify build inputs
+        shell: pwsh
+        run: |
+          $required = @(
+            'package.json',
+            'src\main.js',
+            'src\preload.js'
+          )
+
+          foreach ($file in $required) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+              throw "Required Windows build input is missing: $file"
+            }
+          }
+
+          node --version
+          npm --version
+          Write-Host 'Windows packaging configuration:'
+          Get-Content -Raw package.json
+
+      - name: Install exact Windows build toolchain
         run: npm install --no-audit --no-fund
 
-      - name: Build Pexpo 1.1 Windows installer
+      - name: Verify electron-builder
+        run: npx electron-builder --version
+
+      - name: Clean previous build output
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath dist) {
+            Remove-Item -LiteralPath dist -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+
+      - name: Build Pexpo 1.1 Windows NSIS installer
         run: npm run dist
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
-      - name: Verify Pexpo 1.1 installer
+      - name: Verify generated installer
         shell: pwsh
         run: |
           $installer = Join-Path $PWD 'dist\Pexpo-1.1-Setup.exe'
           if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
-            Write-Host 'Files produced in dist:'
-            Get-ChildItem -Path dist -File | Select-Object Name, Length
-            throw 'Pexpo 1.1 Windows installer was not produced at the expected path.'
+            Write-Host 'Build output:'
+            Get-ChildItem -Path dist -Recurse -File | Select-Object FullName, Length
+            throw 'Pexpo-1.1-Setup.exe was not generated.'
           }
 
           $size = (Get-Item -LiteralPath $installer).Length
           if ($size -lt 1048576) {
-            throw "Installer is unexpectedly small: $size bytes."
+            throw "Generated installer is unexpectedly small: $size bytes."
           }
 
-          Write-Host "Created: $installer"
+          Write-Host "Installer: $installer"
           Write-Host "Size: $size bytes"
+          Write-Host 'SHA256:'
           Get-FileHash -LiteralPath $installer -Algorithm SHA256
 
-      - name: Upload Pexpo 1.1 installer
+      - name: Upload Pexpo 1.1 Windows installer
         uses: actions/upload-artifact@v4
         with:
           name: pexpo-windows-1.1
