@@ -15,9 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ManageAccounts
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
@@ -96,7 +94,9 @@ fun AccountProfileSelector(
                         modifier = Modifier.padding(20.dp, 18.dp, 20.dp, 8.dp),
                     )
                 }
-                accounts.forEach { account ->
+                // Pexpo has exactly one Google account. The list is retained
+                // because one account can still have multiple YouTube channels.
+                accounts.take(1).forEach { account ->
                     item {
                         Text(
                             account.email.ifBlank {
@@ -120,18 +120,10 @@ fun AccountProfileSelector(
                 }
                 item {
                     SelectorAction(
-                        Icons.Rounded.Add,
-                        stringResource(R.string.add_account),
-                        onAddAccount,
+                        Icons.Rounded.Settings,
+                        stringResource(R.string.settings),
+                        onOpenSettings,
                     )
-                }
-                item {
-                    SelectorAction(Icons.Rounded.ManageAccounts, stringResource(R.string.manage_accounts)) {
-                        managing = !managing
-                    }
-                }
-                item {
-                    SelectorAction(Icons.Rounded.Settings, stringResource(R.string.settings), onOpenSettings)
                 }
             }
         }
