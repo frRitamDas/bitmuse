@@ -2952,6 +2952,7 @@ private fun PexpoApp(
                     YtMusicLoginScreen(
                         mode = mode,
                         captureRequest = captureRequest,
+                        freshSessionKey = freshGoogleSessionKey,
                         onCaptureUnavailable = { captureFailed = true },
                         onCaptured = { session ->
                             viewModel.onWebSession(session, mode)
