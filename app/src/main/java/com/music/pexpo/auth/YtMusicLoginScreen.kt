@@ -22,17 +22,15 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 
 private const val MUSIC_ORIGIN = "https://music.youtube.com"
-private const val LOGIN_URL = "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true&continue=https%3A%2F%2Fmusic.youtube.com%2F"
+private const val LOGIN_URL = "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=false&continue=https%3A%2F%2Fmusic.youtube.com%2F"
 private const val TAG = "Pexpo"
 
 /**
  * In-app Google sign-in for YouTube Music, and the way to change which channel
  * it listens as.
  *
- * SIGN_IN is a fresh authentication flow: Google/YouTube WebView cookies are
- * cleared completely for the relevant Google hosts before LOGIN_URL is loaded.
- * SWITCH_CHANNEL intentionally keeps the current browser session and opens
- * YouTube Music so its own Accounts switcher can be used.
+ * SIGN_IN is a fresh authentication flow. SWITCH_CHANNEL intentionally keeps
+ * the current browser session for YouTube Music's channel picker.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -40,9 +38,7 @@ fun YtMusicLoginScreen(
     mode: WebSessionMode,
     onCaptured: (CapturedSession) -> Unit,
     modifier: Modifier = Modifier,
-    /** Raise to take the session from the page as it stands. */
     captureRequest: Int = 0,
-    /** Told when a capture was asked for and there was no session to take. */
     onCaptureUnavailable: () -> Unit = {},
 ) {
     var webView by remember { mutableStateOf<WebView?>(null) }
@@ -61,13 +57,11 @@ fun YtMusicLoginScreen(
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
                 webViewClient = object : WebViewClient() {
                     private var captured = false
 
                     override fun onPageFinished(view: WebView?, url: String?) {
-                        // Only SIGN_IN finishes by itself. SWITCH_CHANNEL starts
-                        // on YouTube Music and must never auto-capture its first
-                        // page, because that would defeat channel switching.
                         if (mode != WebSessionMode.SIGN_IN) return
                         if (captured || url?.startsWith(MUSIC_ORIGIN) != true) return
                         if (view != null && captureFrom(view, currentOnCaptured)) captured = true
@@ -76,13 +70,14 @@ fun YtMusicLoginScreen(
 
                 webView = this
                 if (mode == WebSessionMode.SIGN_IN) {
-                    // CookieManager.setCookie() is asynchronous. Wait for its
-                    // completion before the first Google navigation; otherwise
-                    // the previous Google account can win the redirect race.
+                    // Wait for asynchronous cookie expiration before navigating
+                    // to Google. This prevents the old account from winning the
+                    // redirect race during Add Account / fresh sign-in.
                     BrowserSession.clearGoogleCookies {
                         post {
                             stopLoading()
                             clearHistory()
+                            clearCache(true)
                             loadUrl(LOGIN_URL)
                         }
                     }
@@ -102,9 +97,7 @@ private fun captureFrom(view: WebView, onCaptured: (CapturedSession) -> Unit): B
 
     view.evaluateJavascript(YTCFG_PROBE) { raw ->
         val config = raw.parseConfig()
-        if (config == null) {
-            Log.w(TAG, "no ytcfg on the page; falling back to the shell for identity")
-        }
+        if (config == null) Log.w(TAG, "no ytcfg on the page; falling back to cookie identity")
         onCaptured(
             CapturedSession(
                 cookie = cookies,
@@ -120,7 +113,6 @@ private fun captureFrom(view: WebView, onCaptured: (CapturedSession) -> Unit): B
     return true
 }
 
-/** Probe the live YouTube page for the identity it is currently serving. */
 private const val YTCFG_PROBE = """
 (function () {
   try {
