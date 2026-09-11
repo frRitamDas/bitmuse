@@ -62,38 +62,22 @@ fun YtMusicLoginScreen(
                 settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
                 webViewClient = object : WebViewClient() {
                     private var captured = false
-                    private var freshLoginStarted = false
 
                     override fun onPageFinished(view: WebView?, url: String?) {
                         if (mode != WebSessionMode.SIGN_IN) return
                         if (captured || url?.startsWith(MUSIC_ORIGIN) != true) return
                         if (view != null && captureFrom(view, currentOnCaptured)) captured = true
                     }
-
-                    /**
-                     * Google can retain a server-side browser login even after
-                     * individual cookies have been expired. A fresh Pexpo login
-                     * therefore performs an explicit Google logout once, then
-                     * follows Google's redirect to the blank ServiceLogin page.
-                     * The flag prevents a redirect loop.
-                     */
-                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                        if (mode == WebSessionMode.SIGN_IN && freshLoginStarted &&
-                            url?.startsWith("https://accounts.google.com/Logout") == true
-                        ) {
-                            view?.loadUrl(url)
-                            return true
-                        }
-                        return false
-                    }
                 }
 
                 webView = this
                 if (mode == WebSessionMode.SIGN_IN) {
-                    // The authentication WebView is disposable. Clear the
-                    // Google/YouTube cookies first, then clear WebView storage,
-                    // cached pages and form state so a new login cannot inherit
-                    // the previous account's local browser identity.
+                    // A fresh authentication attempt is deliberately isolated
+                    // from the previous Google identity: expire Google cookies,
+                    // clear WebView storage/form/cache state, then explicitly
+                    // sign Google out before following the redirect to the
+                    // blank ServiceLogin page. This applies equally to Home
+                    // Sign In and Account selector -> Add account.
                     BrowserSession.clearGoogleCookies {
                         post {
                             stopLoading()
