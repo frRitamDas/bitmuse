@@ -7,13 +7,18 @@ def patch_home_offline_skeleton() -> None:
     path = ROOT / 'app/src/main/java/com/music/pexpo/ui/screens/HomeScreen.kt'
     text = path.read_text(encoding='utf-8')
 
+    # The 1.5.6 Home behavior may already be present on main. The maintenance
+    # script also has to work from an older 1.5.5 checkout, so only insert the
+    # network declarations when both are genuinely absent. Never duplicate
+    # local Compose declarations.
+    context_marker = '    val homeContext = androidx.compose.ui.platform.LocalContext.current\n'
+    network_marker = '    val networkAvailableForHome = remember {'
     marker = '    PullToRefresh(\n        refreshing = refreshing,'
-    if marker not in text:
-        if 'val networkAvailableForHome' in text and 'feedSkeleton()' in text:
-            return
-        raise RuntimeError('HomeScreen: expected PullToRefresh marker not found')
 
-    replacement = '''    // Reuse Pexpo's existing skeleton UI when the device has no active
+    if context_marker not in text and network_marker not in text:
+        if marker not in text:
+            raise RuntimeError('HomeScreen: expected PullToRefresh marker not found')
+        replacement = '''    // Reuse Pexpo's existing skeleton UI when the device has no active
     // network. This intentionally does not introduce another skeleton
     // implementation: offline Home should look exactly like Home loading.
     val homeContext = androidx.compose.ui.platform.LocalContext.current
@@ -24,7 +29,9 @@ def patch_home_offline_skeleton() -> None:
 
     PullToRefresh(
         refreshing = refreshing,'''
-    text = text.replace(marker, replacement, 1)
+        text = text.replace(marker, replacement, 1)
+    elif context_marker not in text or network_marker not in text:
+        raise RuntimeError('HomeScreen: partial offline-network patch detected; refusing to create duplicate state')
 
     old = '''                is UiState.Error -> item {
                     MessageState(state.message, actionLabel = stringResource(R.string.retry), onAction = onRetry)
@@ -40,11 +47,11 @@ def patch_home_offline_skeleton() -> None:
                         }
                     }
                 }'''
-    if old not in text:
-        if 'if (!networkAvailableForHome)' not in text:
-            raise RuntimeError('HomeScreen: expected error state block not found')
-    else:
+
+    if old in text:
         text = text.replace(old, new, 1)
+    elif new not in text:
+        raise RuntimeError('HomeScreen: expected error state block not found')
 
     path.write_text(text, encoding='utf-8')
 
@@ -66,11 +73,11 @@ def patch_fresh_google_login() -> None:
     # Avoid displaying a stale cached YouTube page while a new Google session
     # is being established. This does not touch the cookie jar.
     marker = '                settings.domStorageEnabled = true\n'
-    replacement = '''                settings.domStorageEnabled = true
-                settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-'''
-    if marker in text and 'settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE' not in text:
-        text = text.replace(marker, replacement, 1)
+    cache_line = '                settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE\n'
+    if cache_line not in text:
+        if marker not in text:
+            raise RuntimeError('YtMusicLoginScreen: expected WebView settings marker not found')
+        text = text.replace(marker, marker + cache_line, 1)
 
     old_cleanup = '''                    BrowserSession.clearGoogleCookies {
                         post {
@@ -89,7 +96,7 @@ def patch_fresh_google_login() -> None:
                     }'''
     if old_cleanup in text:
         text = text.replace(old_cleanup, new_cleanup, 1)
-    elif 'clearCache(true)' not in text:
+    elif new_cleanup not in text:
         raise RuntimeError('YtMusicLoginScreen: expected fresh-login navigation block not found')
 
     path.write_text(text, encoding='utf-8')
@@ -98,4 +105,4 @@ def patch_fresh_google_login() -> None:
 if __name__ == '__main__':
     patch_home_offline_skeleton()
     patch_fresh_google_login()
-    print('Pexpo 1.5.6 patches applied: offline Home skeleton + deterministic fresh Google login.')
+    print('Pexpo 1.5.6 patches applied idempotently: offline Home skeleton + deterministic fresh Google login.')
