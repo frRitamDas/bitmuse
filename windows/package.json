@@ -20,8 +20,7 @@
       "output": "dist"
     },
     "win": {
-      "target": ["nsis"],
-      "icon": "assets/pexpo.ico"
+      "target": ["nsis"]
     },
     "nsis": {
       "oneClick": false,
