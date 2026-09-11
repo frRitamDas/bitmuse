@@ -4,16 +4,11 @@ import android.webkit.CookieManager
 import com.music.pexpo.data.DebugLog as Log
 import java.util.concurrent.atomic.AtomicInteger
 
-/** What the in-app browser is being opened for. */
 enum class WebSessionMode {
-    /** No usable session yet: sign in to Google. */
     SIGN_IN,
-
-    /** Already signed in; open YouTube Music for channel switching. */
     SWITCH_CHANNEL,
 }
 
-/** A session lifted out of the in-app browser. */
 data class CapturedSession(
     val cookie: String,
     val pageId: String?,
@@ -24,21 +19,8 @@ data class CapturedSession(
     val loggedIn: Boolean,
 )
 
-/**
- * Temporary Google/YouTube authentication state used by the WebView.
- * Durable Pexpo multi-account sessions remain in AuthStore.
- */
 object BrowserSession {
-    /**
-     * Expire Google/YouTube cookies before a fresh login and invoke the callback
-     * only after every asynchronous mutation has completed and Chromium has
-     * been flushed. Cookie deletion is domain/path sensitive, so both discovered
-     * cookies and Google's common identity-cookie names are expired over the
-     * common authentication paths and host/parent domains.
-     *
-     * removeAllCookies() is deliberately not used because other in-app web
-     * integrations can share the WebView cookie store.
-     */
+    /** Expire Google/YouTube identity cookies before a fresh login transaction. */
     fun clearGoogleCookies(onComplete: () -> Unit = {}) {
         val manager = runCatching { CookieManager.getInstance() }.getOrElse {
             Log.w(TAG, "unable to obtain WebView CookieManager: ${it.message}")
@@ -103,11 +85,13 @@ object BrowserSession {
         "SID", "SSID", "APISID", "SAPISID", "HSID", "LSID", "OSID",
         "__Secure-1PSID", "__Secure-3PSID", "__Secure-1PAPISID", "__Secure-3PAPISID",
         "__Secure-1PSIDTS", "__Secure-3PSIDTS", "__Secure-1PSIDCC", "__Secure-3PSIDCC",
-        "__Secure-YEC", "__Host-GAPS", "GAPS", "AEC", "SOCS", "SIDCC",
-        "LOGIN_INFO", "PREF", "YSC", "VISITOR_INFO1_LIVE",
+        "__Secure-1PSIDUC", "__Secure-3PSIDUC", "__Secure-YEC", "__Host-GAPS", "GAPS",
+        "AEC", "SOCS", "SIDCC", "LOGIN_INFO", "PREF", "YSC", "VISITOR_INFO1_LIVE",
+        "NID", "1P_JAR", "OTZ", "ACCOUNT_CHOOSER", "GALX", "SMSV",
     )
 
     private val GOOGLE_PATHS = listOf(
-        "/", "/ServiceLogin", "/ServiceLoginAuth", "/signin", "/accounts", "/youtubei/v1",
+        "/", "/ServiceLogin", "/ServiceLogin/", "/ServiceLoginAuth", "/ServiceLoginAuth/",
+        "/signin", "/signin/", "/accounts", "/accounts/", "/youtubei/v1",
     )
 }
