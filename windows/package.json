@@ -1,0 +1,39 @@
+{
+  "name": "pexpo-windows",
+  "productName": "Pexpo Music",
+  "version": "1.1.0",
+  "description": "Pexpo Music for Microsoft Windows",
+  "author": "Ritam Das",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.music.pexpo.windows",
+    "productName": "Pexpo Music",
+    "artifactName": "Pexpo-${version}-Setup.${ext}",
+    "executableName": "Pexpo",
+    "publisherName": "Ritam Das",
+    "copyright": "Copyright © Ritam Das",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "assets/pexpo.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Pexpo Music",
+      "runAfterFinish": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^38.1.0",
+    "electron-builder": "^26.0.12"
+  }
+}
