@@ -17,36 +17,36 @@ def replace_in(path: Path, replacements: list[tuple[str, str]]) -> None:
 def patch_branding() -> None:
     # Visible app strings. Keep package/class compatibility names unchanged.
     for path in ROOT.glob('app/src/main/res/**/strings.xml'):
-        replace_in(path, [('BitChord', 'Pexpo'), ('bitchord %1$s', 'Pexpo %1$s')])
+        replace_in(path, [('Pexpo', 'Pexpo'), ('pexpo %1$s', 'Pexpo %1$s')])
 
     for path in ROOT.glob('app/src/main/java/**/*.kt'):
         replace_in(path, [
-            ('"Visit BitChord"', '"Visit Pexpo"'),
-            ('"Listening to BitChord"', '"Listening to Pexpo"'),
-            ('"BitChord"', '"Pexpo"'),
+            ('"Visit Pexpo"', '"Visit Pexpo"'),
+            ('"Listening to Pexpo"', '"Listening to Pexpo"'),
+            ('"Pexpo"', '"Pexpo"'),
         ])
 
-    replace_in(ROOT / 'app/src/main/java/com/music/bitchord/data/discord/DiscordRPC.kt', [
-        ('const val PROJECT_URL = "https://github.com/kushagrasinghx/BitChord"',
+    replace_in(ROOT / 'app/src/main/java/com/music/pexpo/data/discord/DiscordRPC.kt', [
+        ('const val PROJECT_URL = "https://github.com/kushagrasinghx/Pexpo"',
          'const val PROJECT_URL = "https://pexpomusic.xo.je"'),
-        ('const val DEFAULT_BUTTON_2 = "Visit BitChord"',
+        ('const val DEFAULT_BUTTON_2 = "Visit Pexpo"',
          'const val DEFAULT_BUTTON_2 = "Visit Pexpo"'),
     ])
 
     # The shared Replay poster is drawn directly onto a Bitmap, so Android
     # string resources cannot fix its brand. Likewise the saved filename is
     # visible in galleries/file managers and must not leak the old name.
-    replace_in(ROOT / 'app/src/main/java/com/music/bitchord/ui/replay/ReplayPoster.kt', [
-        ('canvas.drawText("BitChord",', 'canvas.drawText("Pexpo",'),
+    replace_in(ROOT / 'app/src/main/java/com/music/pexpo/ui/replay/ReplayPoster.kt', [
+        ('canvas.drawText("Pexpo",', 'canvas.drawText("Pexpo",'),
     ])
-    replace_in(ROOT / 'app/src/main/java/com/music/bitchord/ui/replay/ReplayShareSheet.kt', [
-        ('"bitchord-replay-${label.replace', '"pexpo-replay-${label.replace'),
-        ('${Environment.DIRECTORY_PICTURES}/BitChord', '${Environment.DIRECTORY_PICTURES}/Pexpo'),
+    replace_in(ROOT / 'app/src/main/java/com/music/pexpo/ui/replay/ReplayShareSheet.kt', [
+        ('"pexpo-replay-${label.replace', '"pexpo-replay-${label.replace'),
+        ('${Environment.DIRECTORY_PICTURES}/Pexpo', '${Environment.DIRECTORY_PICTURES}/Pexpo'),
     ])
 
 
 def patch_player_bar_stability() -> None:
-    path = ROOT / 'app/src/main/java/com/music/bitchord/MainActivity.kt'
+    path = ROOT / 'app/src/main/java/com/music/pexpo/MainActivity.kt'
     text = path.read_text(encoding='utf-8')
 
     anchor = '    val player = rememberPlayerState(controller)\n'
@@ -107,7 +107,7 @@ def patch_workflow() -> None:
         ('v1.5.3 already published.', 'v1.5.4 already published.'),
         ('gh release create v1.5.3', 'gh release create v1.5.4'),
         ("--title 'Pexpo Music v1.5.3'", "--title 'Pexpo Music v1.5.4'"),
-        ("Pexpo Music v1.5.3: fixed account/profile switcher, working Add account and Manage accounts, duplicate Sign out, Replay persistence safety, remaining BitChord Replay branding, and variant-aware in-app APK updates.",
+        ("Pexpo Music v1.5.3: fixed account/profile switcher, working Add account and Manage accounts, duplicate Sign out, Replay persistence safety, remaining Pexpo Replay branding, and variant-aware in-app APK updates.",
          "Pexpo Music v1.5.4: improved system stability and bug fixes, persistent mini-player recovery on Samsung/One UI, complete Pexpo branding in Discord and Replay sharing, Pexpo website button, and safer release/update handling."),
     ])
 
