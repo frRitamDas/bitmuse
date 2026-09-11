@@ -35,7 +35,8 @@ class AuthStore(context: Context) {
                 val active = saved.firstOrNull { it.accountId == activeAccountId } ?: saved.first()
                 if (saved.size != 1 || saved.first().accountId != active.accountId) {
                     replaceSessions(listOf(active))
-                    select(active.accountId, active.activeProfileId)
+                    activeAccountId = active.accountId
+                    activeProfileId = active.activeProfileId
                 }
                 return listOf(active)
             }
@@ -63,7 +64,8 @@ class AuthStore(context: Context) {
             if (only == null) {
                 prefs.edit().remove(KEY_ACTIVE_ACCOUNT).remove(KEY_ACTIVE_PROFILE).apply()
             } else {
-                select(only.accountId, only.activeProfileId)
+                activeAccountId = only.accountId
+                activeProfileId = only.activeProfileId
             }
         }
 
@@ -105,7 +107,8 @@ class AuthStore(context: Context) {
                 .remove(KEY_COOKIE)
                 .apply()
         } else {
-            select(fallback.accountId, fallback.activeProfileId)
+            activeAccountId = fallback.accountId
+            activeProfileId = fallback.activeProfileId
             prefs.edit().putString(KEY_COOKIE, fallback.cookie).apply()
         }
         return fallback
