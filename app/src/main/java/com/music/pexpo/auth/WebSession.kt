@@ -2,6 +2,7 @@ package com.music.pexpo.auth
 
 import android.webkit.CookieManager
 import com.music.pexpo.data.DebugLog as Log
+import java.util.concurrent.atomic.AtomicInteger
 
 /** What the in-app browser is being opened for. */
 enum class WebSessionMode {
@@ -16,20 +17,7 @@ enum class WebSessionMode {
     SWITCH_CHANNEL,
 }
 
-/**
- * A session lifted out of the in-app browser: the cookie, plus who the page
- * being looked at says it is.
- *
- * The identity fields come from the live page's `ytcfg` rather than from a
- * later server-side fetch of the shell, and that is the entire point. Which
- * channel YouTube Music serves by default is not a question this app gets to
- * answer, but which channel the page in front of the listener is *currently*
- * showing is not a question at all — it is written down in the page. Reading
- * it there is what lets "switch to the channel I want, then save" work.
- *
- * All identity fields are nullable: a page that will not give them up leaves
- * the app exactly where it was before, scraping the shell for its best guess.
- */
+/** A session lifted out of the in-app browser. */
 data class CapturedSession(
     val cookie: String,
     /** `DELEGATED_SESSION_ID` — set only while a brand channel is selected. */
@@ -45,54 +33,66 @@ data class CapturedSession(
 )
 
 /**
- * The WebView's own cookie jar, which is not the app's.
+ * The WebView's own cookie jar, which is not Pexpo's persisted account store.
  *
- * These are separate stores and the difference is invisible until it bites:
- * signing out of Pexpo forgets the cookie the app makes requests with, and
- * leaves the browser's copy untouched. The next sign-in then loads
- * accounts.google.com, is recognised immediately, redirects straight through
- * to music.youtube.com and hands back a cookie for the account that was just
- * signed out of — a sign-in screen that cannot be used to sign in as anyone
- * else, and shows barely a flicker while refusing to.
+ * Google authentication is the only state cleared here. Pexpo's durable
+ * multi-account sessions remain in AuthStore, so Add Account can replace the
+ * temporary browser identity without deleting any stored Pexpo account.
  */
 object BrowserSession {
 
     /**
-     * Forgets the Google login the in-app browser is holding.
+     * Clears Google/YouTube cookies and invokes [onComplete] only after every
+     * asynchronous cookie-expiration operation has completed and the jar has
+     * been flushed.
      *
-     * Google's cookies only, by name, rather than [CookieManager.removeAllCookies]:
-     * the same jar holds the Discord and Last.fm logins from their own in-app
-     * browsers, and signing out of YouTube Music is not a reason to sign out of
-     * those. There is no per-domain removal in the API, so each cookie is
-     * overwritten with an expired one of the same name.
+     * The previous implementation started navigation immediately after
+     * `setCookie()`. Cookie writes are asynchronous, so Google could process
+     * the login URL while the previous account was still present and redirect
+     * directly to YouTube Music. Waiting for all callbacks removes that race.
+     *
+     * We intentionally do not call `removeAllCookies()`: the WebView cookie jar
+     * is shared and clearing it wholesale would also affect Discord/Last.fm.
      */
-    fun clearGoogleCookies() {
-        // Best effort throughout. CookieManager needs a WebView provider, and
-        // on a device that is mid-update or has none there isn't one — which is
-        // a reason for the next sign-in to be less convenient, not a reason for
-        // signing out to crash.
+    fun clearGoogleCookies(onComplete: () -> Unit = {}) {
         val manager = runCatching { CookieManager.getInstance() }.getOrElse {
             Log.w("Pexpo", "no cookie manager to clear: ${it.message}")
+            onComplete()
             return
         }
-        var cleared = 0
-        GOOGLE_ORIGINS.forEach { origin ->
-            val jar = manager.getCookie(origin) ?: return@forEach
-            val host = origin.substringAfter("://")
-            jar.split(';').forEach { entry ->
-                val name = entry.substringBefore('=').trim()
-                if (name.isEmpty()) return@forEach
-                // Both the host-only and the domain-wide form: a cookie set on
-                // `.google.com` is not removed by expiring it on the host, and
-                // which of the two a given cookie used is not recorded here.
-                manager.setCookie(origin, "$name=; Max-Age=0; Path=/")
-                manager.setCookie(origin, "$name=; Max-Age=0; Path=/; Domain=$host")
-                manager.setCookie(origin, "$name=; Max-Age=0; Path=/; Domain=.$host")
-                cleared++
+
+        val expirations = buildList {
+            GOOGLE_ORIGINS.forEach { origin ->
+                val jar = manager.getCookie(origin) ?: return@forEach
+                val host = origin.removePrefix("https://").substringBefore('/')
+                val parent = host.substringAfter('.', "").takeIf { it.contains('.') }
+                jar.split(';').forEach { entry ->
+                    val name = entry.substringBefore('=').trim()
+                    if (name.isEmpty()) return@forEach
+                    add(origin to "$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/")
+                    add(origin to "$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Domain=$host")
+                    if (parent != null) {
+                        add(origin to "$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Domain=.$parent")
+                    }
+                }
             }
         }
-        runCatching { manager.flush() }
-        Log.d("Pexpo", "cleared $cleared browser cookies for Google")
+
+        if (expirations.isEmpty()) {
+            runCatching { manager.flush() }
+            onComplete()
+            return
+        }
+
+        val remaining = AtomicInteger(expirations.size)
+        expirations.forEach { (origin, cookie) ->
+            manager.setCookie(origin, cookie) {
+                if (remaining.decrementAndGet() == 0) {
+                    runCatching { manager.flush() }
+                    onComplete()
+                }
+            }
+        }
     }
 
     private val GOOGLE_ORIGINS = listOf(

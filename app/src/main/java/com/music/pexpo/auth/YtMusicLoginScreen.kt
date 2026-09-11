@@ -1,7 +1,6 @@
 package com.music.pexpo.auth
 
 import android.annotation.SuppressLint
-import android.net.Uri
 import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -24,29 +23,16 @@ import kotlinx.serialization.json.jsonObject
 
 private const val MUSIC_ORIGIN = "https://music.youtube.com"
 private const val LOGIN_URL = "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true&continue=https%3A%2F%2Fmusic.youtube.com%2F"
-private val LOGOUT_THEN_LOGIN_URL = "https://accounts.google.com/Logout?continue=${Uri.encode(LOGIN_URL)}"
 private const val TAG = "Pexpo"
 
 /**
  * In-app Google sign-in for YouTube Music, and the way to change which channel
  * it listens as.
  *
- * [WebSessionMode.SIGN_IN] loads the standard Google web login with
- * `continue=music.youtube.com`. The user authenticates directly against
- * accounts.google.com (2FA, passkeys etc. all work — it's the real page). When
- * Google redirects back to music.youtube.com the session is taken automatically
- * and the screen closes. The browser's Google cookies are cleared on the way in,
- * or a listener who signed out would be waved straight back through as the
- * account they were trying to leave — see [BrowserSession.clearGoogleCookies].
- *
- * [WebSessionMode.SWITCH_CHANNEL] keeps those cookies and opens YouTube Music
- * itself, so the listener can use the avatar menu's own Accounts list — the one
- * screen that authoritatively knows which channels exist and which is which.
- * Nothing is taken automatically there: the session is read when they say so,
- * by raising [captureRequest].
- *
- * Either way what is read is the page's own `ytcfg`, not a guess made later
- * from a server-side fetch. The credential itself never passes through app code.
+ * SIGN_IN is a fresh authentication flow: Google/YouTube WebView cookies are
+ * cleared completely for the relevant Google hosts before LOGIN_URL is loaded.
+ * SWITCH_CHANNEL intentionally keeps the current browser session and opens
+ * YouTube Music so its own Accounts switcher can be used.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -54,10 +40,7 @@ fun YtMusicLoginScreen(
     mode: WebSessionMode,
     onCaptured: (CapturedSession) -> Unit,
     modifier: Modifier = Modifier,
-    /**
-     * Raise to take the session from the page as it stands. Ignored at its
-     * initial value, so arriving on the screen doesn't capture anything.
-     */
+    /** Raise to take the session from the page as it stands. */
     captureRequest: Int = 0,
     /** Told when a capture was asked for and there was no session to take. */
     onCaptureUnavailable: () -> Unit = {},
@@ -75,18 +58,16 @@ fun YtMusicLoginScreen(
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { context ->
-            if (mode == WebSessionMode.SIGN_IN) BrowserSession.clearGoogleCookies()
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 webViewClient = object : WebViewClient() {
                     private var captured = false
+
                     override fun onPageFinished(view: WebView?, url: String?) {
-                        // Only [WebSessionMode.SIGN_IN] finishes by itself. In
-                        // the switch flow the first music.youtube.com page is
-                        // where the listener starts, not where they are done —
-                        // grabbing the session there would save the channel
-                        // they came to change.
+                        // Only SIGN_IN finishes by itself. SWITCH_CHANNEL starts
+                        // on YouTube Music and must never auto-capture its first
+                        // page, because that would defeat channel switching.
                         if (mode != WebSessionMode.SIGN_IN) return
                         if (captured || url?.startsWith(MUSIC_ORIGIN) != true) return
                         if (view != null && captureFrom(view, currentOnCaptured)) captured = true
@@ -94,26 +75,29 @@ fun YtMusicLoginScreen(
                 }
 
                 webView = this
-                loadUrl(if (mode == WebSessionMode.SIGN_IN) LOGIN_URL else "$MUSIC_ORIGIN/")
+                if (mode == WebSessionMode.SIGN_IN) {
+                    // CookieManager.setCookie() is asynchronous. Wait for its
+                    // completion before the first Google navigation; otherwise
+                    // the previous Google account can win the redirect race.
+                    BrowserSession.clearGoogleCookies {
+                        post {
+                            stopLoading()
+                            clearHistory()
+                            loadUrl(LOGIN_URL)
+                        }
+                    }
+                } else {
+                    loadUrl("$MUSIC_ORIGIN/")
+                }
             }
         },
     )
 }
 
-/**
- * Takes the session from [view], if it is holding one.
- *
- * @return whether there was one to take. False means the cookie jar has no
- *   signing secret in it yet — the page is mid-login, or is not a YouTube page
- *   at all — and the caller should leave the screen open rather than saving
- *   something that cannot sign a request. See [AuthStore.hasApiSid].
- */
+/** Takes the session from [view], if it is holding one. */
 private fun captureFrom(view: WebView, onCaptured: (CapturedSession) -> Unit): Boolean {
     val cookies = CookieManager.getInstance().getCookie(MUSIC_ORIGIN)
     if (cookies == null || !AuthStore.hasApiSid(cookies)) return false
-    // Flushed here rather than left to the WebView's own schedule: the screen
-    // is usually closing in the next frame, and a cookie jar written after
-    // that is a jar the next sign-in reads instead of this one.
     CookieManager.getInstance().flush()
 
     view.evaluateJavascript(YTCFG_PROBE) { raw ->
@@ -124,8 +108,6 @@ private fun captureFrom(view: WebView, onCaptured: (CapturedSession) -> Unit): B
         onCaptured(
             CapturedSession(
                 cookie = cookies,
-                // `<accountSyncId>||<sessionSyncId>` — only the first half
-                // names the account; the second changes on its own schedule.
                 dataSyncId = config?.string("dataSyncId")?.substringBefore("||"),
                 pageId = config?.string("pageId"),
                 authUser = config?.string("authUser"),
@@ -138,14 +120,7 @@ private fun captureFrom(view: WebView, onCaptured: (CapturedSession) -> Unit): B
     return true
 }
 
-/**
- * The identity of the page as the page itself has it.
- *
- * Returns an object rather than a string so the WebView serialises it — a
- * probe that stringified its own result would come back double-encoded. A page
- * without `ytcfg` (an error page, a redirect that hasn't landed) returns null,
- * which is a fine answer and not an error.
- */
+/** Probe the live YouTube page for the identity it is currently serving. */
 private const val YTCFG_PROBE = """
 (function () {
   try {
@@ -170,7 +145,6 @@ private const val YTCFG_PROBE = """
 
 private val json = Json { ignoreUnknownKeys = true }
 
-/** The probe's result, or null for anything that isn't the object it promises. */
 private fun String?.parseConfig(): JsonObject? =
     this?.let { runCatching { json.parseToJsonElement(it).jsonObject }.getOrNull() }
 
