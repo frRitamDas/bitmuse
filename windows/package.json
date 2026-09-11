@@ -7,23 +7,33 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win nsis"
+    "dist": "electron-builder --win nsis --publish never"
   },
   "build": {
     "appId": "com.music.pexpo.windows",
     "productName": "Pexpo Music",
-    "artifactName": "Pexpo-${version}-Setup.${ext}",
+    "artifactName": "Pexpo-1.1-Setup.${ext}",
     "executableName": "Pexpo",
     "publisherName": "Ritam Das",
     "copyright": "Copyright © Ritam Das",
     "directories": {
       "output": "dist"
     },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
     "win": {
-      "target": ["nsis"]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
