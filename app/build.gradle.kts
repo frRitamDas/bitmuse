@@ -28,8 +28,8 @@ android {
         applicationId = "com.music.pexpo"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "1.5.7"
+        versionCode = 20
+        versionName = "1.5.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "LASTFM_API_KEY", "\"${lastfmApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "LASTFM_SECRET", "\"${lastfmSecret.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
