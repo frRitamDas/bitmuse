@@ -14,7 +14,6 @@
     "productName": "Pexpo Music",
     "artifactName": "Pexpo-1.1-Setup.${ext}",
     "executableName": "Pexpo",
-    "publisherName": "Ritam Das",
     "copyright": "Copyright © Ritam Das",
     "asar": true,
     "directories": {
