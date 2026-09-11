@@ -153,7 +153,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("io.ktor:ktor-client-websockets:3.0.3")
     implementation(files(newPipeExtractorStripped))
-    implementation("com.github.TeamNewPipe:nanojson:e9d656ddb49a412a5a0d5ef20ca7ef09549996")
+    implementation("com.github.TeamNewPipe:nanojson:1d9e1aea9049fc9f85e68b43ba39fe7be1c1f751")
     implementation("org.jsoup:jsoup:1.22.2")
     implementation("com.google.code.findbugs:jsr305:3.0.2")
     implementation("com.google.protobuf:protobuf-javalite:4.35.0")
