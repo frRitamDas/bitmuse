@@ -109,7 +109,7 @@ jobs:
         echo 'Permanent Pexpo release keystore validated and selected.'
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-    - name: Build Pexpo v1.5.5
+    - name: Build Pexpo v1.5.6
       run: ./gradlew assembleProdRelease --stacktrace
     - name: Verify Pexpo release identity
       run: |
@@ -120,65 +120,60 @@ jobs:
         [ -n "$AAPT" ]
         BADGING=$("$AAPT" dump badging "$APK")
         echo "$BADGING" | grep -F "package: name='com.music.pexpo'" >/dev/null
-        echo "$BADGING" | grep -F "versionName='1.5.5'" >/dev/null
-        echo 'Verified production APK identity: com.music.pexpo v1.5.5'
+        echo "$BADGING" | grep -F "versionName='1.5.6'" >/dev/null
+        echo 'Verified production APK identity: com.music.pexpo v1.5.6'
     - name: Prepare release assets
       run: |
         set -euo pipefail
         mkdir -p release-assets
-        cp app/build/outputs/apk/prod/release/app-prod-universal-release.apk release-assets/pexpo-1.5.5-universal.apk
-        cp app/build/outputs/apk/prod/release/app-prod-arm64-v8a-release.apk release-assets/pexpo-1.5.5-arm64-v8a.apk
-        cp app/build/outputs/apk/prod/release/app-prod-armeabi-v7a-release.apk release-assets/pexpo-1.5.5-armeabi-v7a.apk
-        cp app/build/outputs/apk/prod/release/app-prod-x86_64-release.apk release-assets/pexpo-1.5.5-x86_64.apk
+        cp app/build/outputs/apk/prod/release/app-prod-universal-release.apk release-assets/pexpo-1.5.6-universal.apk
+        cp app/build/outputs/apk/prod/release/app-prod-arm64-v8a-release.apk release-assets/pexpo-1.5.6-arm64-v8a.apk
+        cp app/build/outputs/apk/prod/release/app-prod-armeabi-v7a-release.apk release-assets/pexpo-1.5.6-armeabi-v7a.apk
+        cp app/build/outputs/apk/prod/release/app-prod-x86_64-release.apk release-assets/pexpo-1.5.6-x86_64.apk
         sha256sum release-assets/*.apk > release-assets/SHA256SUMS.txt
-    - name: Upload Pexpo 1.5.5 artifact
+    - name: Upload Pexpo 1.5.6 artifact
       uses: actions/upload-artifact@v4
       with:
-        name: pexpo-v1.5.5-release
+        name: pexpo-v1.5.6-release
         path: release-assets/*
-    - name: Publish GitHub Release v1.5.5
+    - name: Publish GitHub Release v1.5.6
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         NOTES=$(cat <<'EOF'
-        Pexpo Music v1.5.5
+        Pexpo Music v1.5.6
 
         ### What's changed
-        - Fixed account-button routing: signed-out users now go to Settings instead of seeing an empty account selector.
-        - Signed-in users continue to get the account/profile selector from the Home account button.
-        - Settings > Account & integrations > Listen as now opens the same account/profile selector used on Home.
-        - Preserved immediate first-login account/avatar refresh behavior.
-        - Removed the temporary legacy-version shutdown gate; older Pexpo versions remain usable.
-        - Preserved the normal optional update flow with Install now / Later.
-        - Production builds now require configured Last.fm API credentials, fixing Last.fm login builds that silently shipped without credentials.
-        - Fixed Canvas network gating so Wi-Fi always permits animated covers while the cellular preference only applies on cellular transport.
-        - Renamed the BitChord source/package identity to Pexpo without changing unrelated application behavior.
+        - Restored the stable Pexpo 1.5.5 application behavior and UI as the 1.5.6 base.
+        - Preserved the single-account behavior: Add account remains visible but is unavailable once one account exists, with the "Not more than one account" indicator.
+        - Preserved account/profile switching within the existing account.
+        - Preserved the Pexpo production identity com.music.pexpo.
         - Production APKs are signed only with the configured permanent Pexpo release keystore.
 
         ### Downloads
         Universal, arm64-v8a, armeabi-v7a and x86_64 APKs are attached, with SHA-256 checksums.
         EOF
         )
-        if gh release view v1.5.5 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-          gh release edit v1.5.5 --repo "$GITHUB_REPOSITORY" --title 'Pexpo Music v1.5.5' --notes "$NOTES"
+        if gh release view v1.5.6 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          gh release edit v1.5.6 --repo "$GITHUB_REPOSITORY" --title 'Pexpo Music v1.5.6' --notes "$NOTES"
         else
-          gh release create v1.5.5 --repo "$GITHUB_REPOSITORY" --target main --title 'Pexpo Music v1.5.5' --notes "$NOTES"
+          gh release create v1.5.6 --repo "$GITHUB_REPOSITORY" --target main --title 'Pexpo Music v1.5.6' --notes "$NOTES"
         fi
-        gh release upload v1.5.5 \
+        gh release upload v1.5.6 \
           --repo "$GITHUB_REPOSITORY" \
           --clobber \
-          release-assets/pexpo-1.5.5-universal.apk \
-          release-assets/pexpo-1.5.5-arm64-v8a.apk \
-          release-assets/pexpo-1.5.5-armeabi-v7a.apk \
-          release-assets/pexpo-1.5.5-x86_64.apk \
+          release-assets/pexpo-1.5.6-universal.apk \
+          release-assets/pexpo-1.5.6-arm64-v8a.apk \
+          release-assets/pexpo-1.5.6-armeabi-v7a.apk \
+          release-assets/pexpo-1.5.6-x86_64.apk \
           release-assets/SHA256SUMS.txt
     - name: Remove superseded Actions artifacts
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
-        gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts[] | select(.name != "pexpo-v1.5.5-release") | .id' | while read -r id; do
+        gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts[] | select(.name != "pexpo-v1.5.6-release") | .id' | while read -r id; do
           [ -z "$id" ] || gh api -X DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}" || true
         done
     - name: Finalize patched source
@@ -189,5 +184,5 @@ jobs:
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add app/src app/build.gradle.kts scripts README.md
         if git diff --cached --quiet; then echo 'Source already finalized.'; exit 0; fi
-        git commit -m 'fix: finalize Pexpo 1.5.5 maintenance patches'
+        git commit -m 'fix: finalize Pexpo 1.5.6 stable base'
         git push origin main
