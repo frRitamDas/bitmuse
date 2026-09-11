@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Settings
@@ -29,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -64,6 +66,7 @@ fun AccountProfileSelector(
     var managing by remember { mutableStateOf(false) }
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
     val shape = MaterialTheme.shapes.extraLarge
+    val hasAccount = accounts.isNotEmpty()
 
     Column(
         modifier.fillMaxSize()
@@ -94,8 +97,8 @@ fun AccountProfileSelector(
                         modifier = Modifier.padding(20.dp, 18.dp, 20.dp, 8.dp),
                     )
                 }
-                // Pexpo has exactly one Google account. The list is retained
-                // because one account can still have multiple YouTube channels.
+                // Pexpo permits exactly one Google account. One account can
+                // still contain multiple YouTube channels/profiles.
                 accounts.take(1).forEach { account ->
                     item {
                         Text(
@@ -119,13 +122,54 @@ fun AccountProfileSelector(
                     }
                 }
                 item {
-                    SelectorAction(
-                        Icons.Rounded.Settings,
-                        stringResource(R.string.settings),
-                        onOpenSettings,
-                    )
+                    if (hasAccount) {
+                        // Keep the Add account row visible exactly as in the
+                        // previous single-account UI, but make the restriction
+                        // explicit and non-interactive.
+                        SingleAccountLimitAction()
+                    } else {
+                        SelectorAction(
+                            Icons.Rounded.Add,
+                            stringResource(R.string.add_account),
+                            onAddAccount,
+                        )
+                    }
+                }
+                item {
+                    SelectorAction(Icons.Rounded.Settings, stringResource(R.string.settings), onOpenSettings)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SingleAccountLimitAction() {
+    Row(
+        Modifier.fillMaxWidth()
+            .heightIn(min = 60.dp)
+            .alpha(0.55f)
+            .semantics {
+                contentDescription = stringResource(R.string.single_account_limit)
+            }
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Add, contentDescription = null)
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.add_account),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                stringResource(R.string.single_account_limit),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
