@@ -16,9 +16,15 @@ typealias WebSessionMode = com.music.pexpo.auth.WebSessionMode
  */
 private val webSessionState = mutableStateOf<WebSessionMode?>(null)
 
+/** Increments whenever a new SIGN_IN transaction is opened. */
+var freshGoogleSessionKey by mutableIntStateOf(0)
+
 var webSession: WebSessionMode?
     get() = webSessionState.value
     set(value) {
+        if (value == WebSessionMode.SIGN_IN && webSessionState.value != WebSessionMode.SIGN_IN) {
+            freshGoogleSessionKey++
+        }
         webSessionState.value = value
         if (value == null) {
             captureRequest = 0
