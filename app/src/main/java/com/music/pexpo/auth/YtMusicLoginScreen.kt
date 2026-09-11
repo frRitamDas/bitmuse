@@ -2,6 +2,7 @@ package com.music.pexpo.auth
 
 import android.annotation.SuppressLint
 import android.webkit.CookieManager
+import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +24,7 @@ import kotlinx.serialization.json.jsonObject
 
 private const val MUSIC_ORIGIN = "https://music.youtube.com"
 private const val LOGIN_URL = "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=false&continue=https%3A%2F%2Fmusic.youtube.com%2F"
+private const val GOOGLE_LOGOUT_URL = "https://accounts.google.com/Logout?continue=https%3A%2F%2Faccounts.google.com%2FServiceLogin%3Fltmpl%3Dmusic%26service%3Dyoutube%26passive%3Dfalse%26continue%3Dhttps%253A%252F%252Fmusic.youtube.com%252F"
 private const val TAG = "Pexpo"
 
 /**
@@ -60,25 +62,46 @@ fun YtMusicLoginScreen(
                 settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
                 webViewClient = object : WebViewClient() {
                     private var captured = false
+                    private var freshLoginStarted = false
 
                     override fun onPageFinished(view: WebView?, url: String?) {
                         if (mode != WebSessionMode.SIGN_IN) return
                         if (captured || url?.startsWith(MUSIC_ORIGIN) != true) return
                         if (view != null && captureFrom(view, currentOnCaptured)) captured = true
                     }
+
+                    /**
+                     * Google can retain a server-side browser login even after
+                     * individual cookies have been expired. A fresh Pexpo login
+                     * therefore performs an explicit Google logout once, then
+                     * follows Google's redirect to the blank ServiceLogin page.
+                     * The flag prevents a redirect loop.
+                     */
+                    override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                        if (mode == WebSessionMode.SIGN_IN && freshLoginStarted &&
+                            url?.startsWith("https://accounts.google.com/Logout") == true
+                        ) {
+                            view?.loadUrl(url)
+                            return true
+                        }
+                        return false
+                    }
                 }
 
                 webView = this
                 if (mode == WebSessionMode.SIGN_IN) {
-                    // Wait for asynchronous cookie expiration before navigating
-                    // to Google. This prevents the old account from winning the
-                    // redirect race during Add Account / fresh sign-in.
+                    // The authentication WebView is disposable. Clear the
+                    // Google/YouTube cookies first, then clear WebView storage,
+                    // cached pages and form state so a new login cannot inherit
+                    // the previous account's local browser identity.
                     BrowserSession.clearGoogleCookies {
                         post {
                             stopLoading()
                             clearHistory()
                             clearCache(true)
-                            loadUrl(LOGIN_URL)
+                            clearFormData()
+                            runCatching { WebStorage.getInstance().deleteAllData() }
+                            loadUrl(GOOGLE_LOGOUT_URL)
                         }
                     }
                 } else {
