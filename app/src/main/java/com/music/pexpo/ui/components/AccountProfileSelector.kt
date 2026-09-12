@@ -57,7 +57,7 @@ fun AccountProfileSelector(accounts: List<GoogleAccountSession>, activeAccountId
     modifier: Modifier = Modifier) {
     var managing by remember { mutableStateOf(false) }
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
-    val canAddAccount = accounts.isEmpty()
+    val canAddAccount = true
     val shape = MaterialTheme.shapes.extraLarge
     Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim.copy(alpha = .48f)).clickable(onClick = onDismiss), horizontalAlignment = Alignment.CenterHorizontally) {
         Surface(color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface, shape = shape,

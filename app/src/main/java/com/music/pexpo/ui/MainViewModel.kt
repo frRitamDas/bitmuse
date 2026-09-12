@@ -350,11 +350,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // channel/profile thumbnails are still missing. Reuse the existing
         // authoritative channel fetch; its result updates the same session
         // objects while the selector is already open, so no restart is needed.
-        if (authStore.sessions.any { session ->
-                session.profiles.any { profile -> profile.avatar.isNullOrBlank() }
-            }) {
-            loadChannels(force = true)
-        }
+        // The Google profile avatar can change without changing the saved
+        // session URL. Always refresh the authoritative YouTube channel data
+        // when the selector opens so the selector never shows a stale avatar.
+        if (_signedIn.value) loadChannels(force = true)
     }
 
     private val _history = MutableStateFlow<UiState<List<Song>>>(UiState.Loading)
