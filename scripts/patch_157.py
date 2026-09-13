@@ -73,7 +73,6 @@ def patch_vendored_newpipe_utils() -> None:
     text = text.replace('import java.util.Objects;\n', '')
     text = text.replace('import java.util.stream.Collectors;\n', '')
     text = text.replace('return string == null || string.isBlank();', 'return string == null || string.trim().isEmpty();')
-
     text = replace_once(text, '''        return elements.entrySet().stream()
                 .map(entry -> entry.getKey() + mapJoin + entry.getValue())
                 .collect(Collectors.joining(delimiter));''', '''        final StringBuilder joined = new StringBuilder();
@@ -84,7 +83,6 @@ def patch_vendored_newpipe_utils() -> None:
             first = false;
         }
         return joined.toString();''', 'NewPipe Utils join')
-
     text = replace_once(text, '''        return Arrays.stream(elements)
                 .filter(s -> !isNullOrEmpty(s) && !s.equals("null"))
                 .collect(Collectors.joining(delimiter));''', '''        final StringBuilder joined = new StringBuilder();
@@ -96,7 +94,6 @@ def patch_vendored_newpipe_utils() -> None:
             first = false;
         }
         return joined.toString();''', 'NewPipe Utils non-empty join')
-
     text = replace_once(text, '''        return getStringResultFromRegexArray(input,
                 Arrays.stream(regexes)
                         .filter(Objects::nonNull)
@@ -109,7 +106,6 @@ def patch_vendored_newpipe_utils() -> None:
         }
         return getStringResultFromRegexArray(
                 input, java.util.Arrays.copyOf(compiled, count), group);''', 'NewPipe Utils regex conversion')
-
     if '.stream()' in text or 'Arrays.stream' in text or 'streamAsJsonObjects' in text:
         raise RuntimeError('NewPipe Utils still contains Java stream API usage')
     path.write_text(text, encoding='utf-8')
@@ -149,6 +145,7 @@ def patch_release_metadata() -> None:
         return
     text = path.read_text(encoding='utf-8')
     text = text.replace('- minSdk 21 / compileSdk 35 / targetSdk 35.', '- minSdk 24 / compileSdk 36 / targetSdk 35.')
+    text = text.replace('sdkVersion:\'21\'', 'sdkVersion:\'24\'')
     path.write_text(text, encoding='utf-8')
 
 
