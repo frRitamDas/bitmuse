@@ -22,14 +22,14 @@ val lastfmSecret: String = (localProps.getProperty("LASTFM_SECRET") ?: System.ge
 
 android {
     namespace = "com.music.pexpo"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.music.pexpo"
-        minSdk = 26
-        targetSdk = 36
-        versionCode = 20
-        versionName = "1.5.6"
+        minSdk = 21
+        targetSdk = 35
+        versionCode = 21
+        versionName = "1.5.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "LASTFM_API_KEY", "\"${lastfmApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("String", "LASTFM_SECRET", "\"${lastfmSecret.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
@@ -84,8 +84,9 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
     }
     buildFeatures {
         compose = true
@@ -97,7 +98,7 @@ android {
 }
 
 kotlin {
-    compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
+    compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8) }
 }
 
 val newPipeExtractorRaw: Configuration by configurations.creating {
@@ -153,7 +154,12 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("io.ktor:ktor-client-websockets:3.0.3")
     implementation(files(newPipeExtractorStripped))
-    implementation("com.github.TeamNewPipe:nanojson:1d9e1aea9049fc9f85e68b43ba39fe7be1c1f751")
+    // NewPipeExtractor 0.26.3 uses JsonArray.streamAsJsonObjects(). The
+    // 1d9e... NanoJSON commit removed that API, producing the exact
+    // NoSuchMethodError seen in Pexpo 1.5.6. Keep the compatible API revision
+    // until the extractor itself is rebuilt without streamAsJsonObjects().
+    implementation("com.github.TeamNewPipe:nanojson:e9d656ddb49a412a5a0a5d5ef20ca7ef09549996")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("org.jsoup:jsoup:1.22.2")
     implementation("com.google.code.findbugs:jsr305:3.0.2")
     implementation("com.google.protobuf:protobuf-javalite:4.35.0")
