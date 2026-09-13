@@ -11,20 +11,15 @@
  * as part of that combination.
  *
  * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero
- * General Public License for more details.
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public
+ * License for more details.
  *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
 // JNI bridge to the vocal-separation front end.
-//
-// Unlike the mel front end this one is stereo and linear-frequency, because
-// that is what open-unmix was trained on. The layout it produces is bin-major
-// rather than frame-major specifically so it matches the model's tensor shape
-// [1, 2, bins, frames] with no transpose on the Kotlin side.
 
 #include <jni.h>
 
@@ -32,11 +27,11 @@
 
 #include "analyzer/vocal_spectrogram.h"
 
+using bitchord::smart::ComputeVocalSpectrogram;
+using bitchord::smart::VocalSpectrogram;
+
 extern "C" {
 
-// Takes the two channels as separate arrays rather than one interleaved one,
-// mirroring the planar layout the front end wants and avoiding a deinterleave
-// on either side of the boundary.
 JNIEXPORT jfloatArray JNICALL
 Java_com_music_pexpo_playback_smart_VocalSpectrogram_nativeCompute(
     JNIEnv* env,
@@ -53,8 +48,8 @@ Java_com_music_pexpo_playback_smart_VocalSpectrogram_nativeCompute(
   if (left_count > 0) env->GetFloatArrayRegion(left, 0, left_count, channels[0].data());
   if (right_count > 0) env->GetFloatArrayRegion(right, 0, right_count, channels[1].data());
 
-  const pexpo::smart::VocalSpectrogram spectrogram =
-      pexpo::smart::ComputeVocalSpectrogram(channels, sample_rate);
+  const VocalSpectrogram spectrogram =
+      ComputeVocalSpectrogram(channels, sample_rate);
 
   const jsize produced = static_cast<jsize>(spectrogram.values.size());
   jfloatArray result = env->NewFloatArray(produced);
@@ -68,25 +63,25 @@ Java_com_music_pexpo_playback_smart_VocalSpectrogram_nativeCompute(
 JNIEXPORT jint JNICALL
 Java_com_music_pexpo_playback_smart_VocalSpectrogram_nativeBins(
     JNIEnv* /* env */, jclass /* clazz */) {
-  return static_cast<jint>(pexpo::smart::kVocalSpectrogramBins);
+  return static_cast<jint>(bitchord::smart::kVocalSpectrogramBins);
 }
 
 JNIEXPORT jdouble JNICALL
 Java_com_music_pexpo_playback_smart_VocalSpectrogram_nativeSampleRate(
     JNIEnv* /* env */, jclass /* clazz */) {
-  return pexpo::smart::kVocalSpectrogramSampleRate;
+  return bitchord::smart::kVocalSpectrogramSampleRate;
 }
 
 JNIEXPORT jint JNICALL
 Java_com_music_pexpo_playback_smart_VocalSpectrogram_nativeHop(
     JNIEnv* /* env */, jclass /* clazz */) {
-  return static_cast<jint>(pexpo::smart::kVocalSpectrogramHop);
+  return static_cast<jint>(bitchord::smart::kVocalSpectrogramHop);
 }
 
 JNIEXPORT jint JNICALL
 Java_com_music_pexpo_playback_smart_VocalSpectrogram_nativeFftSize(
     JNIEnv* /* env */, jclass /* clazz */) {
-  return static_cast<jint>(pexpo::smart::kVocalSpectrogramFft);
+  return static_cast<jint>(bitchord::smart::kVocalSpectrogramFft);
 }
 
 }  // extern "C"

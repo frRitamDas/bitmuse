@@ -76,8 +76,6 @@ object AppUpdateChecker {
             }
             .orEmpty()
 
-        // Prefer the exact ABI currently installed. Universal is only the
-        // fallback when a matching split is unavailable.
         apkAssets.firstOrNull { asset ->
             asset["name"]?.jsonPrimitive?.contentOrNull?.lowercase() == "pexpo-${release["tag_name"]?.jsonPrimitive?.contentOrNull?.removePrefix("v")?.lowercase()}-$variant.apk"
         }?.get("browser_download_url")?.jsonPrimitive?.contentOrNull
@@ -170,17 +168,47 @@ object AppUpdateChecker {
         val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.packageManager.getPackageArchiveInfo(
                 file.absolutePath,
-                PackageManager.PackageInfoFlags.of(0L),
+                PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong()),
             )
         } else {
             @Suppress("DEPRECATION")
-            context.packageManager.getPackageArchiveInfo(file.absolutePath, 0)
+            context.packageManager.getPackageArchiveInfo(
+                file.absolutePath,
+                PackageManager.GET_SIGNATURES,
+            )
         } ?: error("The downloaded file is not a valid Android APK.")
 
         check(info.packageName == BuildConfig.APPLICATION_ID) {
             "The downloaded APK belongs to ${info.packageName}, not ${BuildConfig.APPLICATION_ID}."
         }
+
+        check(info.longVersionCode > BuildConfig.VERSION_CODE) {
+            "The downloaded APK is not newer than the installed Pexpo version."
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val installed = context.packageManager.packageInfoForCurrentApp(
+                PackageManager.GET_SIGNING_CERTIFICATES,
+            ).signingInfo
+            val candidate = info.signingInfo
+            check(installed != null && candidate != null &&
+                installed.apkContentsSigners.contentEquals(candidate.apkContentsSigners)) {
+                "The downloaded APK is not signed by the installed Pexpo signing certificate."
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            val installed = context.packageManager.packageInfoForCurrentApp(PackageManager.GET_SIGNATURES)
+            @Suppress("DEPRECATION")
+            val candidate = info.signatures.orEmpty()
+            @Suppress("DEPRECATION")
+            check(installed.signatures.orEmpty().contentEquals(candidate)) {
+                "The downloaded APK is not signed by the installed Pexpo signing certificate."
+            }
+        }
     }
+
+    private fun PackageManager.packageInfoForCurrentApp(flags: Int) =
+        getPackageInfo(BuildConfig.APPLICATION_ID, flags)
 
     private fun installedVariant(context: Context): String {
         val splits = runCatching {
