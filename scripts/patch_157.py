@@ -16,7 +16,6 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 def patch_build() -> None:
     path = ROOT / 'app/build.gradle.kts'
     text = path.read_text(encoding='utf-8')
-
     text = re.sub(r'compileSdk = \d+', 'compileSdk = 36', text, count=1)
     text = re.sub(r'minSdk = \d+', 'minSdk = 23', text, count=1)
     text = re.sub(r'targetSdk = \d+', 'targetSdk = 35', text, count=1)
@@ -52,11 +51,8 @@ def patch_build() -> None:
         text = text.replace('dependencies {\n    val composeBom', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n    val composeBom', 1)
 
     required = [
-        'compileSdk = 36',
-        'minSdk = 23',
-        'targetSdk = 35',
-        'versionCode = 21',
-        'versionName = "1.5.7"',
+        'compileSdk = 36', 'minSdk = 23', 'targetSdk = 35',
+        'versionCode = 21', 'versionName = "1.5.7"',
         'isCoreLibraryDesugaringEnabled = true',
         'sourceCompatibility = JavaVersion.VERSION_1_8',
         'targetCompatibility = JavaVersion.VERSION_1_8',
@@ -73,29 +69,25 @@ def patch_build() -> None:
 def patch_vendored_newpipe_utils() -> None:
     path = ROOT / 'app/src/main/java/org/schabi/newpipe/extractor/utils/Utils.java'
     text = path.read_text(encoding='utf-8')
-
     text = text.replace('import java.util.Arrays;\n', '')
     text = text.replace('import java.util.Objects;\n', '')
     text = text.replace('import java.util.stream.Collectors;\n', '')
     text = text.replace('return string == null || string.isBlank();', 'return string == null || string.trim().isEmpty();')
 
-    old_join = '''        return elements.entrySet().stream()
+    text = replace_once(text, '''        return elements.entrySet().stream()
                 .map(entry -> entry.getKey() + mapJoin + entry.getValue())
-                .collect(Collectors.joining(delimiter));'''
-    new_join = '''        final StringBuilder joined = new StringBuilder();
+                .collect(Collectors.joining(delimiter));''', '''        final StringBuilder joined = new StringBuilder();
         boolean first = true;
         for (final Map.Entry<? extends CharSequence, ? extends CharSequence> entry : elements.entrySet()) {
             if (!first) joined.append(delimiter);
             joined.append(entry.getKey()).append(mapJoin).append(entry.getValue());
             first = false;
         }
-        return joined.toString();'''
-    text = replace_once(text, old_join, new_join, 'NewPipe Utils join')
+        return joined.toString();''', 'NewPipe Utils join')
 
-    old_non_empty = '''        return Arrays.stream(elements)
+    text = replace_once(text, '''        return Arrays.stream(elements)
                 .filter(s -> !isNullOrEmpty(s) && !s.equals("null"))
-                .collect(Collectors.joining(delimiter));'''
-    new_non_empty = '''        final StringBuilder joined = new StringBuilder();
+                .collect(Collectors.joining(delimiter));''', '''        final StringBuilder joined = new StringBuilder();
         boolean first = true;
         for (final String element : elements) {
             if (isNullOrEmpty(element) || element.equals("null")) continue;
@@ -103,23 +95,20 @@ def patch_vendored_newpipe_utils() -> None:
             joined.append(element);
             first = false;
         }
-        return joined.toString();'''
-    text = replace_once(text, old_non_empty, new_non_empty, 'NewPipe Utils non-empty join')
+        return joined.toString();''', 'NewPipe Utils non-empty join')
 
-    old_regex = '''        return getStringResultFromRegexArray(input,
+    text = replace_once(text, '''        return getStringResultFromRegexArray(input,
                 Arrays.stream(regexes)
                         .filter(Objects::nonNull)
                         .map(Pattern::compile)
                         .toArray(Pattern[]::new),
-                group);'''
-    new_regex = '''        final Pattern[] compiled = new Pattern[regexes.length];
+                group);''', '''        final Pattern[] compiled = new Pattern[regexes.length];
         int count = 0;
         for (final String regex : regexes) {
             if (regex != null) compiled[count++] = Pattern.compile(regex);
         }
         return getStringResultFromRegexArray(
-                input, java.util.Arrays.copyOf(compiled, count), group);'''
-    text = replace_once(text, old_regex, new_regex, 'NewPipe Utils regex conversion')
+                input, java.util.Arrays.copyOf(compiled, count), group);''', 'NewPipe Utils regex conversion')
 
     if '.stream()' in text or 'Arrays.stream' in text or 'streamAsJsonObjects' in text:
         raise RuntimeError('NewPipe Utils still contains Java stream API usage')
@@ -132,12 +121,11 @@ def patch_account_avatar_cache() -> None:
     if 'CachePolicy.DISABLED' in text:
         return
     text = text.replace('import coil3.compose.AsyncImage\n', 'import coil3.compose.AsyncImage\nimport coil3.request.CachePolicy\nimport coil3.request.ImageRequest\nimport androidx.compose.ui.platform.LocalContext\n')
-    old = '''@Composable private fun ProfileAvatar(profile: YouTubeProfile) {
+    text = replace_once(text, '''@Composable private fun ProfileAvatar(profile: YouTubeProfile) {
     val model = profile.avatar?.trim()?.takeIf { it.isNotEmpty() }
     if (model != null) AsyncImage(model = model, contentDescription = profile.name, modifier = Modifier.size(38.dp).clip(CircleShape))
     else Box(Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Person, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-}'''
-    new = '''@Composable private fun ProfileAvatar(profile: YouTubeProfile) {
+}''', '''@Composable private fun ProfileAvatar(profile: YouTubeProfile) {
     val model = profile.avatar?.trim()?.takeIf { it.isNotEmpty() }
     if (model != null) {
         val context = LocalContext.current
@@ -151,8 +139,16 @@ def patch_account_avatar_cache() -> None:
         }
         AsyncImage(model = request, contentDescription = profile.name, modifier = Modifier.size(38.dp).clip(CircleShape))
     } else Box(Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Person, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-}'''
-    text = replace_once(text, old, new, 'account selector avatar cache')
+}''', 'account selector avatar cache')
+    path.write_text(text, encoding='utf-8')
+
+
+def patch_release_metadata() -> None:
+    path = ROOT / '.github/workflows/pexpo.yml'
+    if not path.exists():
+        return
+    text = path.read_text(encoding='utf-8')
+    text = text.replace('- minSdk 21 / compileSdk 35 / targetSdk 35.', '- minSdk 23 / compileSdk 36 / targetSdk 35.')
     path.write_text(text, encoding='utf-8')
 
 
@@ -178,6 +174,7 @@ if __name__ == '__main__':
     patch_build()
     patch_vendored_newpipe_utils()
     patch_account_avatar_cache()
+    patch_release_metadata()
     verify_source_streams()
     verify_release_identity()
     print('Pexpo 1.5.7 universal compatibility patch applied and verified.')
