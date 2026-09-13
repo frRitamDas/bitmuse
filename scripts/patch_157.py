@@ -18,7 +18,7 @@ def patch_build() -> None:
     text = path.read_text(encoding='utf-8')
 
     text = re.sub(r'compileSdk = \d+', 'compileSdk = 36', text, count=1)
-    text = re.sub(r'minSdk = \d+', 'minSdk = 21', text, count=1)
+    text = re.sub(r'minSdk = \d+', 'minSdk = 23', text, count=1)
     text = re.sub(r'targetSdk = \d+', 'targetSdk = 35', text, count=1)
     text = re.sub(r'versionCode = \d+', 'versionCode = 21', text, count=1)
     text = re.sub(r'versionName = "[^"]+"', 'versionName = "1.5.7"', text, count=1)
@@ -53,7 +53,7 @@ def patch_build() -> None:
 
     required = [
         'compileSdk = 36',
-        'minSdk = 21',
+        'minSdk = 23',
         'targetSdk = 35',
         'versionCode = 21',
         'versionName = "1.5.7"',
