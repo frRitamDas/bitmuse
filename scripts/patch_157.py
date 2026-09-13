@@ -126,9 +126,6 @@ def patch_vendored_newpipe_utils() -> None:
 
 
 def patch_account_avatar_cache() -> None:
-    # The selector opens on explicit account-state refreshes. Google can change
-    # the bytes behind the same avatar URL, so Coil's normal URL cache can keep
-    # displaying yesterday's image even after Home has the fresh URL/content.
     path = ROOT / 'app/src/main/java/com/music/pexpo/ui/components/AccountProfileSelector.kt'
     text = path.read_text(encoding='utf-8')
     if 'CachePolicy.DISABLED' in text:
@@ -164,10 +161,14 @@ def verify_source_streams() -> None:
         if not path.is_file() or path.suffix.lower() not in {'.kt', '.java'}:
             continue
         text = path.read_text(encoding='utf-8', errors='ignore')
-        if 'streamAsJsonObjects' in text or re.search(r'\.stream\s*\(', text):
+        if (
+            'streamAsJsonObjects' in text
+            or 'Arrays.stream' in text
+            or re.search(r'\.stream\s*\(\s*\)', text)
+        ):
             violations.append(str(path))
     if violations:
-        raise RuntimeError('Java stream usage remains in app/src: ' + ', '.join(violations))
+        raise RuntimeError('Java stream API usage remains in app/src: ' + ', '.join(violations))
 
 
 def verify_release_identity() -> None:
