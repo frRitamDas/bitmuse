@@ -22,7 +22,7 @@ val lastfmSecret: String = (localProps.getProperty("LASTFM_SECRET") ?: System.ge
 
 android {
     namespace = "com.music.pexpo"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.music.pexpo"
@@ -158,7 +158,7 @@ dependencies {
     // 1d9e... NanoJSON commit removed that API, producing the exact
     // NoSuchMethodError seen in Pexpo 1.5.6. Keep the compatible API revision
     // until the extractor itself is rebuilt without streamAsJsonObjects().
-    implementation("com.github.TeamNewPipe:nanojson:e9d656ddb49a412a5a0a5d5ef20ca7ef09549996")
+    implementation("com.github.TeamNewPipe:nanojson:e9d656ddb49a412a5a0d5ef20ca7ef09549996")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("org.jsoup:jsoup:1.22.2")
     implementation("com.google.code.findbugs:jsr305:3.0.2")
