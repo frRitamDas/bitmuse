@@ -41,6 +41,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
 import com.music.pexpo.R
 import com.music.pexpo.auth.GoogleAccountSession
 import com.music.pexpo.auth.YouTubeProfile
@@ -99,8 +102,21 @@ fun AccountProfileSelector(accounts: List<GoogleAccountSession>, activeAccountId
 
 @Composable private fun ProfileAvatar(profile: YouTubeProfile) {
     val model = profile.avatar?.trim()?.takeIf { it.isNotEmpty() }
-    if (model != null) AsyncImage(model = model, contentDescription = profile.name, modifier = Modifier.size(38.dp).clip(CircleShape))
-    else Box(Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Person, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+    if (model != null) {
+        val context = LocalContext.current
+        val request = remember(model) {
+            ImageRequest.Builder(context)
+                .data(model)
+                // Google can replace the bytes behind the same avatar URL. The
+                // selector is opened explicitly to inspect current account state,
+                // so a stale Coil memory/disk entry is worse than one small refresh.
+                .memoryCachePolicy(CachePolicy.DISABLED)
+                .diskCachePolicy(CachePolicy.DISABLED)
+                .networkCachePolicy(CachePolicy.ENABLED)
+                .build()
+        }
+        AsyncImage(model = request, contentDescription = profile.name, modifier = Modifier.size(38.dp).clip(CircleShape))
+    } else Box(Modifier.size(38.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Person, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant) }
 }
 
 @Composable private fun SelectorAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
