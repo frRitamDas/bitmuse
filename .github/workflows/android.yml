@@ -1,9 +1,9 @@
 name: Android CI
-# Stable 1.5.5 codebase released under Pexpo identity/version 1.5.6
+# Pexpo 1.5.7: universal playback/extractor compatibility and release validation
 
 on:
   push:
-    branches: [main]
+    branches: [main, pexpo-1.5.7-fixes]
   pull_request:
   workflow_dispatch:
 
@@ -35,12 +35,18 @@ jobs:
       run: |
         printf 'LASTFM_API_KEY=%s\n' "$LASTFM_API_KEY" > local.properties
         printf 'LASTFM_SECRET=%s\n' "$LASTFM_SECRET" >> local.properties
-    - name: Apply maintenance patch
-      run: python3 scripts/patch_155.py
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
+    - name: Verify no direct streamAsJsonObjects source usage
+      run: |
+        set -euo pipefail
+        if grep -R -n --exclude-dir=.git --exclude-dir=build --include='*.kt' --include='*.java' 'streamAsJsonObjects' .; then
+          echo 'Unsafe streamAsJsonObjects usage remains in project source.' >&2
+          exit 1
+        fi
+        echo 'No streamAsJsonObjects usage remains in Kotlin/Java source.'
     - name: Build Dev Debug APK
-      run: ./gradlew assembleDevDebug --stacktrace
+      run: ./gradlew clean assembleDevDebug --stacktrace
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
@@ -48,7 +54,7 @@ jobs:
         path: app/build/outputs/apk/dev/debug/*.apk
 
   build-prod-release:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/pexpo-1.5.7-fixes'
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Repository
@@ -71,8 +77,6 @@ jobs:
         fi
         printf 'LASTFM_API_KEY=%s\n' "$LASTFM_API_KEY" > local.properties
         printf 'LASTFM_SECRET=%s\n' "$LASTFM_SECRET" >> local.properties
-    - name: Apply Pexpo 1.5.5 maintenance patch
-      run: python3 scripts/patch_155.py
     - name: Setup permanent release signing
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -84,34 +88,29 @@ jobs:
         for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
           if [ -z "${!name}" ]; then
             echo "Missing required Actions secret: $name" >&2
-            echo 'Configure the four permanent Pexpo signing secrets before running a production release.' >&2
             exit 1
           fi
         done
         printf '%s' "$KEYSTORE_BASE64" | base64 --decode > pexpo-release.jks
-        if [ ! -s pexpo-release.jks ]; then
-          echo 'KEYSTORE_BASE64 decoded to an empty keystore.' >&2
-          exit 1
-        fi
-        if ! keytool -list -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" >/dev/null 2>&1; then
-          echo 'Permanent Pexpo keystore validation failed: invalid keystore or password.' >&2
-          exit 1
-        fi
-        if ! keytool -list -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
-          echo 'Permanent Pexpo keystore validation failed: KEY_ALIAS was not found.' >&2
-          exit 1
-        fi
+        keytool -list -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" >/dev/null
+        keytool -list -keystore pexpo-release.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
         {
           echo 'storeFile=pexpo-release.jks'
           printf 'storePassword=%s\n' "$KEYSTORE_PASSWORD"
           printf 'keyAlias=%s\n' "$KEY_ALIAS"
           printf 'keyPassword=%s\n' "$KEY_PASSWORD"
         } > keystore.properties
-        echo 'Permanent Pexpo release keystore validated and selected.'
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-    - name: Build Pexpo v1.5.6
-      run: ./gradlew assembleProdRelease --stacktrace
+    - name: Verify source has no unsafe stream API calls
+      run: |
+        set -euo pipefail
+        if grep -R -n --exclude-dir=.git --exclude-dir=build --include='*.kt' --include='*.java' 'streamAsJsonObjects' .; then
+          echo 'Unsafe streamAsJsonObjects usage remains in source.' >&2
+          exit 1
+        fi
+    - name: Build Pexpo v1.5.7 release
+      run: ./gradlew clean assembleProdRelease --stacktrace
     - name: Verify Pexpo release identity
       run: |
         set -euo pipefail
@@ -121,69 +120,55 @@ jobs:
         [ -n "$AAPT" ]
         BADGING=$("$AAPT" dump badging "$APK")
         echo "$BADGING" | grep -F "package: name='com.music.pexpo'" >/dev/null
-        echo "$BADGING" | grep -F "versionName='1.5.6'" >/dev/null
-        echo 'Verified production APK identity: com.music.pexpo v1.5.6'
+        echo "$BADGING" | grep -F "versionCode='21'" >/dev/null
+        echo "$BADGING" | grep -F "versionName='1.5.7'" >/dev/null
+        echo 'Verified production APK identity: com.music.pexpo v1.5.7 (versionCode 21)'
     - name: Prepare release assets
       run: |
         set -euo pipefail
         mkdir -p release-assets
-        cp app/build/outputs/apk/prod/release/app-prod-universal-release.apk release-assets/pexpo-1.5.6-universal.apk
-        cp app/build/outputs/apk/prod/release/app-prod-arm64-v8a-release.apk release-assets/pexpo-1.5.6-arm64-v8a.apk
-        cp app/build/outputs/apk/prod/release/app-prod-armeabi-v7a-release.apk release-assets/pexpo-1.5.6-armeabi-v7a.apk
-        cp app/build/outputs/apk/prod/release/app-prod-x86_64-release.apk release-assets/pexpo-1.5.6-x86_64.apk
+        cp app/build/outputs/apk/prod/release/app-prod-universal-release.apk release-assets/pexpo-1.5.7-universal.apk
+        cp app/build/outputs/apk/prod/release/app-prod-arm64-v8a-release.apk release-assets/pexpo-1.5.7-arm64-v8a.apk
+        cp app/build/outputs/apk/prod/release/app-prod-armeabi-v7a-release.apk release-assets/pexpo-1.5.7-armeabi-v7a.apk
+        cp app/build/outputs/apk/prod/release/app-prod-x86_64-release.apk release-assets/pexpo-1.5.7-x86_64.apk
         sha256sum release-assets/*.apk > release-assets/SHA256SUMS.txt
-    - name: Upload Pexpo 1.5.6 artifact
+    - name: Upload Pexpo 1.5.7 artifact
       uses: actions/upload-artifact@v4
       with:
-        name: pexpo-v1.5.6-release
+        name: pexpo-v1.5.7-release
         path: release-assets/*
-    - name: Publish GitHub Release v1.5.6
+    - name: Publish GitHub Release v1.5.7
+      if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         NOTES=$(cat <<'EOF'
-        Pexpo Music v1.5.6
+        Pexpo Music v1.5.7
 
-        ### What's changed
-        - Restored the stable Pexpo 1.5.5 application behavior and UI as the 1.5.6 base.
-        - Preserved the single-account behavior: Add account remains visible but is unavailable once one account exists, with the "Not more than one account" indicator.
-        - Preserved account/profile switching within the existing account.
-        - Preserved the Pexpo production identity com.music.pexpo.
-        - Production APKs are signed only with the configured permanent Pexpo release keystore.
+        ### Playback and stability
+        - Fixed the NanoJSON/NewPipeExtractor binary API mismatch that caused `NoSuchMethodError: JsonArray.streamAsJsonObjects()` and left affected tracks buffering indefinitely.
+        - Pinned NanoJSON to the compatible API revision used by NewPipeExtractor 0.26.3.
+        - Enabled core-library desugaring and Java/Kotlin 8 bytecode compatibility for the Android app.
+        - Raised release compatibility checks and lowered the declared minimum Android API to 21; the CI build is the authority for dependency compatibility.
+        - Kept player-client fallback ahead of extraction and preserved deterministic failure handling so a broken extractor cannot be hammered repeatedly.
+        - Added a release gate that fails if unsafe `streamAsJsonObjects` calls are present in project Kotlin/Java source.
+
+        ### Upgrade
+        This is a normal in-place update from Pexpo 1.5.6. Version code 21 is higher than version code 20, so Android can update the installed app without requiring an uninstall.
 
         ### Downloads
         Universal, arm64-v8a, armeabi-v7a and x86_64 APKs are attached, with SHA-256 checksums.
         EOF
         )
-        if gh release view v1.5.6 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-          gh release edit v1.5.6 --repo "$GITHUB_REPOSITORY" --title 'Pexpo Music v1.5.6' --notes "$NOTES"
+        if gh release view v1.5.7 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          gh release edit v1.5.7 --repo "$GITHUB_REPOSITORY" --title 'Pexpo Music v1.5.7' --notes "$NOTES"
         else
-          gh release create v1.5.6 --repo "$GITHUB_REPOSITORY" --target main --title 'Pexpo Music v1.5.6' --notes "$NOTES"
+          gh release create v1.5.7 --repo "$GITHUB_REPOSITORY" --target main --title 'Pexpo Music v1.5.7' --notes "$NOTES"
         fi
-        gh release upload v1.5.6 \
-          --repo "$GITHUB_REPOSITORY" \
-          --clobber \
-          release-assets/pexpo-1.5.6-universal.apk \
-          release-assets/pexpo-1.5.6-arm64-v8a.apk \
-          release-assets/pexpo-1.5.6-armeabi-v7a.apk \
-          release-assets/pexpo-1.5.6-x86_64.apk \
+        gh release upload v1.5.7 --repo "$GITHUB_REPOSITORY" --clobber \
+          release-assets/pexpo-1.5.7-universal.apk \
+          release-assets/pexpo-1.5.7-arm64-v8a.apk \
+          release-assets/pexpo-1.5.7-armeabi-v7a.apk \
+          release-assets/pexpo-1.5.7-x86_64.apk \
           release-assets/SHA256SUMS.txt
-    - name: Remove superseded Actions artifacts
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        set -euo pipefail
-        gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts[] | select(.name != "pexpo-v1.5.6-release") | .id' | while read -r id; do
-          [ -z "$id" ] || gh api -X DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}" || true
-        done
-    - name: Finalize patched source
-      if: success()
-      run: |
-        set -euo pipefail
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add app/src app/build.gradle.kts scripts README.md
-        if git diff --cached --quiet; then echo 'Source already finalized.'; exit 0; fi
-        git commit -m 'fix: finalize Pexpo 1.5.6 stable base'
-        git push origin main
