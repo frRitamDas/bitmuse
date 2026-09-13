@@ -76,8 +76,6 @@ object AppUpdateChecker {
             }
             .orEmpty()
 
-        // Prefer the exact ABI currently installed. Universal is only the
-        // fallback when a matching split is unavailable.
         apkAssets.firstOrNull { asset ->
             asset["name"]?.jsonPrimitive?.contentOrNull?.lowercase() == "pexpo-${release["tag_name"]?.jsonPrimitive?.contentOrNull?.removePrefix("v")?.lowercase()}-$variant.apk"
         }?.get("browser_download_url")?.jsonPrimitive?.contentOrNull
@@ -193,7 +191,8 @@ object AppUpdateChecker {
                 PackageManager.GET_SIGNING_CERTIFICATES,
             ).signingInfo
             val candidate = info.signingInfo
-            check(installed != null && candidate != null && installed.hasCommonSignerWith(candidate)) {
+            check(installed != null && candidate != null &&
+                installed.apkContentsSigners.contentEquals(candidate.apkContentsSigners)) {
                 "The downloaded APK is not signed by the installed Pexpo signing certificate."
             }
         } else {
