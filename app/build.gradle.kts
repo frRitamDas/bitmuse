@@ -154,11 +154,11 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("io.ktor:ktor-client-websockets:3.0.3")
     implementation(files(newPipeExtractorStripped))
-    // NewPipeExtractor 0.26.3 uses JsonArray.streamAsJsonObjects(). The
-    // 1d9e... NanoJSON commit removed that API, producing the exact
-    // NoSuchMethodError seen in Pexpo 1.5.6. Keep the compatible API revision
-    // until the extractor itself is rebuilt without streamAsJsonObjects().
-    implementation("com.github.TeamNewPipe:nanojson:e9d656ddb49a412a5a0d5ef20ca7ef09549996")
+    // TeamNewPipe's current NanoJSON tree retains the streamAsJsonObjects()
+    // ABI required by the prebuilt NewPipeExtractor 0.26.3. The previously
+    // pinned e9d656... object is no longer resolvable from JitPack, so pin the
+    // verified current TeamNewPipe commit instead of using a dead coordinate.
+    implementation("com.github.TeamNewPipe:nanojson:c7a6c1c08d16b6d5ecded34758e6415e07be2166")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("org.jsoup:jsoup:1.22.2")
     implementation("com.google.code.findbugs:jsr305:3.0.2")
