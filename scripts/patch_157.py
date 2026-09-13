@@ -37,8 +37,10 @@ def patch_build() -> None:
     old_kotlin = '''kotlin {
     compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
 }'''
-    new_kotlin = '''kotlinOptions {
-    jvmTarget = "1.8"
+    new_kotlin = '''kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
+    }
 }'''
     text = replace_once(text, old_kotlin, new_kotlin, 'Kotlin JVM target')
 
@@ -58,7 +60,7 @@ def patch_build() -> None:
         'isCoreLibraryDesugaringEnabled = true',
         'sourceCompatibility = JavaVersion.VERSION_1_8',
         'targetCompatibility = JavaVersion.VERSION_1_8',
-        'jvmTarget = "1.8"',
+        'JvmTarget.JVM_1_8',
         f'com.github.TeamNewPipe:nanojson:{NANOJSON}',
         'com.android.tools:desugar_jdk_libs:2.1.4',
     ]
@@ -75,7 +77,6 @@ def patch_vendored_newpipe_utils() -> None:
     text = text.replace('import java.util.Arrays;\n', '')
     text = text.replace('import java.util.Objects;\n', '')
     text = text.replace('import java.util.stream.Collectors;\n', '')
-
     text = text.replace('return string == null || string.isBlank();', 'return string == null || string.trim().isEmpty();')
 
     old_join = '''        return elements.entrySet().stream()
@@ -161,11 +162,7 @@ def verify_source_streams() -> None:
         if not path.is_file() or path.suffix.lower() not in {'.kt', '.java'}:
             continue
         text = path.read_text(encoding='utf-8', errors='ignore')
-        if (
-            'streamAsJsonObjects' in text
-            or 'Arrays.stream' in text
-            or re.search(r'\.stream\s*\(\s*\)', text)
-        ):
+        if 'streamAsJsonObjects' in text or 'Arrays.stream' in text or re.search(r'\.stream\s*\(\s*\)', text):
             violations.append(str(path))
     if violations:
         raise RuntimeError('Java stream API usage remains in app/src: ' + ', '.join(violations))
