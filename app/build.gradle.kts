@@ -26,7 +26,7 @@ android {
 
     defaultConfig {
         applicationId = "com.music.pexpo"
-        minSdk = 21
+        minSdk = 26
         targetSdk = 35
         versionCode = 21
         versionName = "1.5.7"
@@ -154,10 +154,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("io.ktor:ktor-client-websockets:3.0.3")
     implementation(files(newPipeExtractorStripped))
-    // TeamNewPipe's current NanoJSON tree retains the streamAsJsonObjects()
-    // ABI required by the prebuilt NewPipeExtractor 0.26.3. The previously
-    // pinned e9d656... object is no longer resolvable from JitPack, so pin the
-    // verified current TeamNewPipe commit instead of using a dead coordinate.
     implementation("com.github.TeamNewPipe:nanojson:c7a6c1c08d16b6d5ecded34758e6415e07be2166")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("org.jsoup:jsoup:1.22.2")
