@@ -17,7 +17,7 @@ def patch_build() -> None:
     path = ROOT / 'app/build.gradle.kts'
     text = path.read_text(encoding='utf-8')
     text = re.sub(r'compileSdk = \d+', 'compileSdk = 36', text, count=1)
-    text = re.sub(r'minSdk = \d+', 'minSdk = 23', text, count=1)
+    text = re.sub(r'minSdk = \d+', 'minSdk = 24', text, count=1)
     text = re.sub(r'targetSdk = \d+', 'targetSdk = 35', text, count=1)
     text = re.sub(r'versionCode = \d+', 'versionCode = 21', text, count=1)
     text = re.sub(r'versionName = "[^"]+"', 'versionName = "1.5.7"', text, count=1)
@@ -51,7 +51,7 @@ def patch_build() -> None:
         text = text.replace('dependencies {\n    val composeBom', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n    val composeBom', 1)
 
     required = [
-        'compileSdk = 36', 'minSdk = 23', 'targetSdk = 35',
+        'compileSdk = 36', 'minSdk = 24', 'targetSdk = 35',
         'versionCode = 21', 'versionName = "1.5.7"',
         'isCoreLibraryDesugaringEnabled = true',
         'sourceCompatibility = JavaVersion.VERSION_1_8',
@@ -148,7 +148,7 @@ def patch_release_metadata() -> None:
     if not path.exists():
         return
     text = path.read_text(encoding='utf-8')
-    text = text.replace('- minSdk 21 / compileSdk 35 / targetSdk 35.', '- minSdk 23 / compileSdk 36 / targetSdk 35.')
+    text = text.replace('- minSdk 21 / compileSdk 35 / targetSdk 35.', '- minSdk 24 / compileSdk 36 / targetSdk 35.')
     path.write_text(text, encoding='utf-8')
 
 
