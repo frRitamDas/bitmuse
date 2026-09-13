@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
@@ -107,9 +108,6 @@ fun AccountProfileSelector(accounts: List<GoogleAccountSession>, activeAccountId
         val request = remember(model) {
             ImageRequest.Builder(context)
                 .data(model)
-                // Google can replace the bytes behind the same avatar URL. The
-                // selector is opened explicitly to inspect current account state,
-                // so a stale Coil memory/disk entry is worse than one small refresh.
                 .memoryCachePolicy(CachePolicy.DISABLED)
                 .diskCachePolicy(CachePolicy.DISABLED)
                 .networkCachePolicy(CachePolicy.ENABLED)
