@@ -17,7 +17,7 @@ def patch_build() -> None:
     path = ROOT / 'app/build.gradle.kts'
     text = path.read_text(encoding='utf-8')
 
-    text = re.sub(r'compileSdk = \d+', 'compileSdk = 35', text, count=1)
+    text = re.sub(r'compileSdk = \d+', 'compileSdk = 36', text, count=1)
     text = re.sub(r'minSdk = \d+', 'minSdk = 21', text, count=1)
     text = re.sub(r'targetSdk = \d+', 'targetSdk = 35', text, count=1)
     text = re.sub(r'versionCode = \d+', 'versionCode = 21', text, count=1)
@@ -52,7 +52,7 @@ def patch_build() -> None:
         text = text.replace('dependencies {\n    val composeBom', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n    val composeBom', 1)
 
     required = [
-        'compileSdk = 35',
+        'compileSdk = 36',
         'minSdk = 21',
         'targetSdk = 35',
         'versionCode = 21',
